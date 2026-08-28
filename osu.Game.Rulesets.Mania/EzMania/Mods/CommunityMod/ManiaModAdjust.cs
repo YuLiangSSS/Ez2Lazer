@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using osu.Framework.Audio;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.IEnumerableExtensions;
 using osu.Framework.Graphics.Sprites;
@@ -14,6 +15,7 @@ using osu.Game.Configuration;
 using osu.Game.EzOsuGame.Localization;
 using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets.Mania.Beatmaps;
+using osu.Game.Rulesets.Mania.Mods;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mania.Scoring;
 using osu.Game.Rulesets.Mania.UI;
@@ -28,7 +30,7 @@ using osu.Game.EzOsuGame.Configuration;
 
 namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 {
-    public partial class ManiaModAdjust : Mod,
+    public partial class ManiaModAdjust : ModRateAdjust,
                                           IApplicableAfterBeatmapConversion,
                                           IApplicableToDifficulty,
                                           IApplicableToBeatmap,
@@ -38,11 +40,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
                                           IApplicableToHUD,
                                           IReadFromConfig,
                                           IApplicableToDrawableRuleset<ManiaHitObject>,
+                                          IManiaRateAdjustmentMod,
                                           IHasSeed
     {
-        public override bool ValidForFreestyleAsRequiredMod => false;
-
-        public override bool ValidForMultiplayerAsFreeMod => false;
 
         public override string Name => @"Adjust";
 
@@ -62,7 +62,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
             typeof(ModHardRock),
         };
 
-        public override string ExtendedIconInformation => "";
+        public override string ExtendedIconInformation => SpeedChange.IsDefault ? string.Empty : $"{SpeedChange.Value:N3}x";
 
         [SettingSource(typeof(AdjustStrings), nameof(AdjustStrings.HP_OVERRIDE_LABEL), nameof(AdjustStrings.HP_OVERRIDE_DESCRIPTION), SettingControlType = typeof(DifficultyAdjustSettingsControl))]
         public DifficultyBindable DrainRate { get; } = new DifficultyBindable
@@ -97,6 +97,17 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 
         [SettingSource(typeof(AdjustStrings), nameof(AdjustStrings.ENABLE_NO_SV_LABEL), nameof(AdjustStrings.ENABLE_NO_SV_DESCRIPTION))]
         public BindableBool ConstantSpeed { get; } = new BindableBool(true);
+
+        [SettingSource(typeof(EzCommonModStrings), nameof(EzCommonModStrings.SPEED_CHANGE_LABEL), nameof(EzCommonModStrings.SPEED_CHANGE_DESCRIPTION), SettingControlType = typeof(MultiplierSettingsSlider))]
+        public override BindableNumber<double> SpeedChange { get; } = new BindableDouble(1)
+        {
+            MinValue = 0.1,
+            MaxValue = 2.5,
+            Precision = 0.025
+        };
+
+        [SettingSource(typeof(EzCommonModStrings), nameof(EzCommonModStrings.ADJUST_PITCH_LABEL), nameof(EzCommonModStrings.ADJUST_PITCH_DESCRIPTION))]
+        public BindableBool AdjustPitch { get; } = new BindableBool();
 
         [SettingSource(typeof(EzCommonModStrings), nameof(EzCommonModStrings.MIRROR_LABEL), nameof(EzCommonModStrings.MIRROR_DESCRIPTION))]
         public BindableBool Mirror { get; } = new BindableBool();
@@ -246,6 +257,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 
                 if (CustomRelease.Value) yield return (AdjustStrings.ENABLE_RELEASE_LENIENCE_LABEL, $"{ReleaseLenience.Value:N1}");
 
+                if (!SpeedChange.IsDefault) yield return (EzCommonModStrings.SPEED_CHANGE_LABEL, $"{SpeedChange.Value:N3}");
+
+                if (AdjustPitch.Value) yield return (EzCommonModStrings.ADJUST_PITCH_LABEL, new EzLocalizationManager.EzLocalisableString("开启", "On"));
+
                 if (ConstantSpeed.Value) yield return (AdjustStrings.ENABLE_NO_SV_LABEL, new EzLocalizationManager.EzLocalisableString("开启", "On"));
 
                 if (Mirror.Value) yield return (EzCommonModStrings.MIRROR_LABEL, new EzLocalizationManager.EzLocalisableString("开启", "On"));
@@ -285,13 +300,19 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
             }
         }
 
+        private readonly RateAdjustModHelper rateAdjustHelper;
+
         public ManiaModAdjust()
         {
+            rateAdjustHelper = new RateAdjustModHelper(SpeedChange);
+
             foreach (var (_, property) in this.GetOrderedSettingsSourceProperties())
             {
                 if (property.GetValue(this) is DifficultyBindable diffAdjustBindable)
                     diffAdjustBindable.ExtendedLimits.Value = true;
             }
+
+            rateAdjustHelper.HandleAudioAdjustments(AdjustPitch);
         }
 
         // private double originalOD;
@@ -333,6 +354,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
             {
                 ManiaHitWindows.ClearModOverride();
             }
+        }
+
+        public override void ApplyToTrack(IAdjustableAudioComponent track)
+        {
+            rateAdjustHelper.ApplyToTrack(track);
         }
 
         public void ApplyToDrawableRuleset(DrawableRuleset<ManiaHitObject> drawableRuleset)
