@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -12,6 +12,7 @@ using osu.Framework.Graphics;
 using osu.Framework.Graphics.Cursor;
 using osu.Framework.Localisation;
 using osu.Game.Beatmaps;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Resources.Localisation.Web;
 using osu.Game.Scoring;
@@ -114,10 +115,34 @@ namespace osu.Game.Screens.Ranking.Expanded.Statistics
             base.Dispose(isDisposing);
         }
 
-        protected override Drawable CreateContent() => counter = new StatisticCounter
+        protected override Drawable CreateContent() => counter = new MaskedStatisticCounter
         {
             Anchor = Anchor.TopCentre,
             Origin = Anchor.TopCentre
         };
+
+        /// <summary>
+        /// 「隐藏成绩」开启时把数字字符替换为 '*' 的计数器。
+        /// </summary>
+        private partial class MaskedStatisticCounter : StatisticCounter
+        {
+            [Resolved]
+            private Ez2ConfigManager ezConfig { get; set; } = null!;
+
+            private IBindable<bool> hideScores = null!;
+
+            [BackgroundDependencyLoader]
+            private void load()
+            {
+                hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+                hideScores.BindValueChanged(_ => UpdateDisplay());
+            }
+
+            protected override LocalisableString FormatCount(int count)
+            {
+                string formatted = count.ToString();
+                return hideScores?.Value == true ? EzScoreVisibility.Mask(formatted) : formatted;
+            }
+        }
     }
 }

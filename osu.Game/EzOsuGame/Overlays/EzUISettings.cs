@@ -75,6 +75,42 @@ namespace osu.Game.EzOsuGame.Overlays
                 {
                     Keywords = new[] { "main menu", "banner", "news", "advertisement", "ui" }
                 },
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = EzSettingsStrings.HIDE_SCORES,
+                    HintText = EzSettingsStrings.HIDE_SCORES_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.HideScores),
+                })
+                {
+                    Keywords = new[] { "hide", "score", "accuracy", "combo", "judgement", "privacy", "leaderboard", "results", "隐藏", "成绩" }
+                },
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = EzSettingsStrings.STORYBOARD_VIDEO_AUTO_SIZE,
+                    HintText = EzSettingsStrings.STORYBOARD_VIDEO_AUTO_SIZE_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.StoryboardAutoVideoSize),
+                })
+                {
+                    Keywords = new[] { "storyboard", "video", "size", "auto", "autosize", "ui" }
+                },
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = EzSettingsStrings.SKIP_WITH_GAMEPLAY_KEYS,
+                    HintText = EzSettingsStrings.SKIP_WITH_GAMEPLAY_KEYS_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.SkipWithGameplayKeys),
+                })
+                {
+                    Keywords = new[] { "skip", "gameplay", "key", "mania", "std" }
+                },
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = EzSettingsStrings.HIT_OBJECT_LIFETIME_USES_OWN_TIME,
+                    HintText = EzSettingsStrings.HIT_OBJECT_LIFETIME_USES_OWN_TIME_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.HitObjectLifetimeUsesOwnTime),
+                })
+                {
+                    Keywords = new[] { "ez", "timing", "lifetime", "hitobject" }
+                },
             });
         }
     }

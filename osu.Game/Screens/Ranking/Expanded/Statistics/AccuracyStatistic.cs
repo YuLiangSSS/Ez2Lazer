@@ -1,8 +1,11 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Localisation;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
@@ -42,12 +45,28 @@ namespace osu.Game.Screens.Ranking.Expanded.Statistics
 
         private partial class Counter : RollingCounter<double>
         {
+            [Resolved]
+            private Ez2ConfigManager ezConfig { get; set; } = null!;
+
+            private IBindable<bool> hideScores = null!;
+
             // FormatAccuracy doesn't round, which means if we use the OutPow10 easing the number will stick 0.01% short for some time.
             // To avoid that let's use a shorter easing which looks roughly the same.
             protected override double RollingDuration => AccuracyCircle.ACCURACY_TRANSFORM_DURATION / 2;
             protected override Easing RollingEasing => Easing.OutQuad;
 
-            protected override LocalisableString FormatCount(double count) => count.FormatAccuracy();
+            [BackgroundDependencyLoader]
+            private void load()
+            {
+                hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+                hideScores.BindValueChanged(_ => UpdateDisplay());
+            }
+
+            protected override LocalisableString FormatCount(double count)
+            {
+                string formatted = count.FormatAccuracy().ToString();
+                return hideScores?.Value == true ? EzScoreVisibility.Mask(formatted) : formatted;
+            }
 
             protected override OsuSpriteText CreateSpriteText() => base.CreateSpriteText().With(s =>
             {

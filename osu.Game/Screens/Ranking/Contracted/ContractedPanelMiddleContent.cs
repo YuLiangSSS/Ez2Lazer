@@ -1,8 +1,9 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System.Linq;
 using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Extensions.Color4Extensions;
 using osu.Framework.Extensions.LocalisationExtensions;
 using osu.Framework.Graphics;
@@ -12,6 +13,7 @@ using osu.Framework.Graphics.Effects;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Localisation;
 using osu.Game.Beatmaps.Drawables;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
@@ -39,6 +41,8 @@ namespace osu.Game.Screens.Ranking.Contracted
         [Resolved]
         private ScoreManager scoreManager { get; set; } = null!;
 
+        private IBindable<bool> hideScores = null!;
+
         /// <summary>
         /// Creates a new <see cref="ContractedPanelMiddleContent"/>.
         /// </summary>
@@ -50,8 +54,10 @@ namespace osu.Game.Screens.Ranking.Contracted
         }
 
         [BackgroundDependencyLoader]
-        private void load()
+        private void load(Ez2ConfigManager ezConfig)
         {
+            hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+
             InternalChild = new GridContainer
             {
                 RelativeSizeAxes = Axes.Both,
@@ -183,7 +189,7 @@ namespace osu.Game.Screens.Ranking.Contracted
                                     {
                                         Anchor = Anchor.Centre,
                                         Origin = Anchor.Centre,
-                                        Current = scoreManager.GetBindableTotalScoreString(score),
+                                        Current = EzScoreVisibility.CreateMaskedBindable(scoreManager.GetBindableTotalScoreString(score), hideScores),
                                         Font = OsuFont.GetFont(size: 20, weight: FontWeight.Medium, fixedWidth: true),
                                         Spacing = new Vector2(-1, 0)
                                     },
@@ -237,7 +243,7 @@ namespace osu.Game.Screens.Ranking.Contracted
                 {
                     Anchor = Anchor.CentreRight,
                     Origin = Anchor.CentreRight,
-                    Text = value,
+                    Current = EzScoreVisibility.CreateMaskedBindable(new Bindable<string>(value), hideScores),
                     Font = OsuFont.GetFont(size: 12, weight: FontWeight.SemiBold),
                     Colour = Color4Extensions.FromHex("#FFDD55")
                 }

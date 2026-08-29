@@ -33,6 +33,7 @@ using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI;
 using osu.Game.Beatmaps;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Overlays.Dialog;
@@ -111,6 +112,8 @@ namespace osu.Game.Screens.Select
 
         private IBindable<ScoringMode> scoringMode { get; set; } = null!;
 
+        private IBindable<bool> hideScores = null!;
+
         private Box background = null!;
         private Box foreground = null!;
 
@@ -151,8 +154,10 @@ namespace osu.Game.Screens.Select
         }
 
         [BackgroundDependencyLoader]
-        private void load()
+        private void load(Ez2ConfigManager ezConfig)
         {
+            hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+
             foregroundColour = colourProvider.Background5;
             backgroundColour = colourProvider.Background3;
             totalScoreBackgroundGradient = ColourInfo.GradientHorizontal(backgroundColour.Opacity(0), backgroundColour);
@@ -450,7 +455,7 @@ namespace osu.Game.Screens.Select
                                                         Anchor = Anchor.TopRight,
                                                         Origin = Anchor.TopRight,
                                                         UseFullGlyphHeight = false,
-                                                        Current = scoreManager.GetBindableTotalScoreString(Score),
+                                                        Current = EzScoreVisibility.CreateMaskedBindable(scoreManager.GetBindableTotalScoreString(Score), hideScores),
                                                         Spacing = new Vector2(-1.5f),
                                                         Font = OsuFont.Style.Subtitle.With(weight: FontWeight.Light, fixedWidth: true),
                                                         Shear = sheared ? -OsuGame.SHEAR : Vector2.Zero,
@@ -685,6 +690,11 @@ namespace osu.Game.Screens.Select
             private readonly float minWidth;
 
             private FillFlowContainer content = null!;
+
+            // 必须强引用持有：GetBindable 返回的是弱绑定副本，若不加字段持有会被 GC，
+            // 「隐藏成绩」开关切换时该副本上的订阅将不再收到变更。
+            private IBindable<bool> hideScores = null!;
+
             public override bool Contains(Vector2 screenSpacePos) => content.Contains(screenSpacePos);
 
             public ScoreComponentLabel(LocalisableString name, LocalisableString value, bool perfect, float minWidth)
@@ -696,8 +706,10 @@ namespace osu.Game.Screens.Select
             }
 
             [BackgroundDependencyLoader]
-            private void load(OsuColour colours, OverlayColourProvider colourProvider)
+            private void load(OsuColour colours, OverlayColourProvider colourProvider, Ez2ConfigManager ezConfig)
             {
+                hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+
                 AutoSizeAxes = Axes.Both;
                 Child = content = new FillFlowContainer
                 {
@@ -716,7 +728,7 @@ namespace osu.Game.Screens.Select
                             // We don't want the value setting the horizontal size, since it leads to wonky accuracy container length,
                             // since the accuracy is sometimes longer than its name.
                             BypassAutoSizeAxes = Axes.X,
-                            Text = value,
+                            Current = EzScoreVisibility.CreateMaskedBindable(new Bindable<string>(value.ToString()), hideScores),
                             Font = OsuFont.Style.Body,
                             Colour = perfect ? colours.Lime1 : Color4.White,
                         },

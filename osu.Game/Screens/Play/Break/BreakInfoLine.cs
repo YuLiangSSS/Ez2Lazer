@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -8,6 +8,7 @@ using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Localisation;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Utils;
@@ -71,11 +72,25 @@ namespace osu.Game.Screens.Play.Break
 
     public partial class PercentageBreakInfoLine : BreakInfoLine<double>
     {
+        // 必须强引用持有：GetBindable 返回弱绑定副本，若不加字段持有会被 GC，开关切换时订阅将失效。
+        private IBindable<bool> hideScores = null!;
+
         public PercentageBreakInfoLine(LocalisableString name)
             : base(name)
         {
         }
 
-        protected override LocalisableString Format(double count) => count.FormatAccuracy();
+        [BackgroundDependencyLoader]
+        private void load(Ez2ConfigManager ezConfig)
+        {
+            hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+            hideScores.BindValueChanged(_ => Current.TriggerChange());
+        }
+
+        protected override LocalisableString Format(double count)
+        {
+            string formatted = count.FormatAccuracy().ToString();
+            return hideScores?.Value == true ? EzScoreVisibility.Mask(formatted) : formatted;
+        }
     }
 }

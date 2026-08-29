@@ -77,6 +77,15 @@ namespace osu.Game.EzOsuGame.Localization
             "开启后将隐藏主界面底部的在线新闻/广告轮播图。",
             "When enabled, the online news/advertisement banner at the bottom of the main menu will be hidden.");
 
+        public static readonly EzLocalizationManager.EzLocalisableString HIDE_SCORES =
+            new EzLocalizationManager.EzLocalisableString("隐藏成绩", "Hide scores");
+
+        public static readonly EzLocalizationManager.EzLocalisableString HIDE_SCORES_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "开启后，选歌界面左侧成绩栏、游玩中的休息段/暂停/失败界面与成绩结果页面中的 Accuracy（准确率）、Score（分数）、MaxCombo（连击）、PP 以及各判定数量的数字"
+            + "将以 * 号显示，其它符号（如 %、x、/、,）保持不变。",
+            "When enabled, the digits of Accuracy, Score, MaxCombo, PP and each judgement count in the song select leaderboard, "
+            + "the in-game break/pause/fail screens and the results screen are replaced with asterisks; other symbols (e.g. %, x, /, ,) remain unchanged.");
+
         public static readonly EzLocalizationManager.EzLocalisableString TURBO_MODE =
             new EzLocalizationManager.EzLocalisableString("极速模式", "Turbo mode");
 

@@ -1,9 +1,12 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Localisation;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
@@ -46,7 +49,7 @@ namespace osu.Game.Screens.Ranking.Expanded.Statistics
             {
                 AutoSizeAxes = Axes.Both,
                 Direction = FillDirection.Horizontal,
-                Child = counter = new StatisticCounter
+                Child = counter = new MaskedStatisticCounter
                 {
                     Anchor = Anchor.TopCentre,
                     Origin = Anchor.TopCentre
@@ -55,7 +58,7 @@ namespace osu.Game.Screens.Ranking.Expanded.Statistics
 
             if (maxCount != null)
             {
-                container.Add(new OsuSpriteText
+                container.Add(new EzMaskedSpriteText
                 {
                     Anchor = Anchor.BottomCentre,
                     Origin = Anchor.BottomCentre,
@@ -66,6 +69,30 @@ namespace osu.Game.Screens.Ranking.Expanded.Statistics
             }
 
             return container;
+        }
+
+        /// <summary>
+        /// 「隐藏成绩」开启时把数字字符替换为 '*' 的计数器。
+        /// </summary>
+        private partial class MaskedStatisticCounter : StatisticCounter
+        {
+            [Resolved]
+            private Ez2ConfigManager ezConfig { get; set; } = null!;
+
+            private IBindable<bool> hideScores = null!;
+
+            [BackgroundDependencyLoader]
+            private void load()
+            {
+                hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+                hideScores.BindValueChanged(_ => UpdateDisplay());
+            }
+
+            protected override LocalisableString FormatCount(int count)
+            {
+                string formatted = count.ToString();
+                return hideScores?.Value == true ? EzScoreVisibility.Mask(formatted) : formatted;
+            }
         }
     }
 }

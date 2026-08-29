@@ -96,6 +96,10 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.EzAnalysisRecEnabled, true);
             SetDefault(Ez2Setting.EzAnalysisSqliteEnabled, true);
             SetDefault(Ez2Setting.HideMainMenuOnlineBanner, false);
+
+            // 隐藏成绩：选歌左侧成绩栏与结算页面的 Accuracy / Score / MaxCombo / 判定数量数字以 * 显示。
+            SetDefault(Ez2Setting.HideScores, false);
+
             SetDefault(Ez2Setting.MenuLogoPath, @"Menu/logo");
             SetDefault(Ez2Setting.MenuLogoText, "(´・ω・｀),120");
             SetDefault(Ez2Setting.MenuLogoVisualisationStyle, EzLogoVisualisationStyle.RadialBars);
@@ -1043,6 +1047,10 @@ namespace osu.Game.EzOsuGame.Configuration
         DesktopPetLive2DLipSync,
 
         // 界面功能
+        /// <summary>
+        /// 隐藏成绩：选歌左侧成绩栏、游玩中的休息段/暂停/失败界面与结算页面的 Accuracy / Score / MaxCombo / PP / 判定数量数字以 * 显示，其它符号保持不变。
+        /// </summary>
+        HideScores,
         KeySoundPreviewMode,
         BeatmapPreviewMode,
         BeatmapPreviewModeMania,

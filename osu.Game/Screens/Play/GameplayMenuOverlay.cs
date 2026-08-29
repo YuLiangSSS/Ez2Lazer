@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -16,6 +16,7 @@ using osu.Framework.Localisation;
 using osu.Framework.Platform;
 using osu.Game.Audio;
 using osu.Game.Beatmaps;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Sprites;
@@ -95,14 +96,20 @@ namespace osu.Game.Screens.Play
         [Resolved]
         private GlobalActionContainer globalAction { get; set; } = null!;
 
+        // 必须强引用持有：GetBindable 返回弱绑定副本，若不加字段持有会被 GC，开关切换时订阅将失效。
+        private IBindable<bool> hideScores = null!;
+
         protected GameplayMenuOverlay()
         {
             RelativeSizeAxes = Axes.Both;
         }
 
         [BackgroundDependencyLoader]
-        private void load(OsuColour colours, GameHost? host)
+        private void load(OsuColour colours, GameHost? host, Ez2ConfigManager ezConfig)
         {
+            hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+            hideScores.BindValueChanged(_ => updateInfoText());
+
             Children = new Drawable[]
             {
                 pauseLoop = new SkinnableSound(new SampleInfo("Gameplay/pause-loop"))
@@ -331,7 +338,9 @@ namespace osu.Game.Screens.Play
                 playInfoText.NewLine();
                 playInfoText.AddText(BeatmapsetsStrings.ShowScoreboardHeadersAccuracy);
                 playInfoText.AddText(": ");
-                playInfoText.AddText(gameplayState!.ScoreProcessor.Accuracy.Value.FormatAccuracy(), cp => cp.Font = cp.Font.With(weight: FontWeight.Bold));
+
+                string accuracy = gameplayState!.ScoreProcessor.Accuracy.Value.FormatAccuracy().ToString();
+                playInfoText.AddText(hideScores?.Value == true ? EzScoreVisibility.Mask(accuracy) : accuracy, cp => cp.Font = cp.Font.With(weight: FontWeight.Bold));
             }
         }
 

@@ -9,6 +9,7 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Audio;
 using osu.Framework.Localisation;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Graphics.UserInterface;
@@ -34,6 +35,11 @@ namespace osu.Game.Screens.Ranking.Expanded
 
         private DrawableSample sampleTick;
 
+        [Resolved]
+        private Ez2ConfigManager ezConfig { get; set; } = null!;
+
+        private IBindable<bool> hideScores = null!;
+
         public TotalScoreCounter(bool playSamples = false)
         {
             // Todo: AutoSize X removed here due to https://github.com/ppy/osu-framework/issues/3369
@@ -46,6 +52,9 @@ namespace osu.Game.Screens.Ranking.Expanded
         [BackgroundDependencyLoader]
         private void load(AudioManager audio)
         {
+            hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
+            hideScores.BindValueChanged(_ => UpdateDisplay());
+
             AddInternal(sampleTick = new DrawableSample(audio.Samples.Get(@"Results/score-tick-lesser")));
         }
 
@@ -57,7 +66,11 @@ namespace osu.Game.Screens.Ranking.Expanded
                 Current.BindValueChanged(_ => startTicking());
         }
 
-        protected override LocalisableString FormatCount(long count) => count.ToString("N0");
+        protected override LocalisableString FormatCount(long count)
+        {
+            string formatted = count.ToString("N0");
+            return hideScores?.Value == true ? EzScoreVisibility.Mask(formatted) : formatted;
+        }
 
         protected override OsuSpriteText CreateSpriteText() => base.CreateSpriteText().With(s =>
         {
