@@ -27,8 +27,8 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
         public override bool ValidForMultiplayer => true;
         public override bool ValidForFreestyleAsRequiredMod => false;
 
-        [SettingSource(typeof(LNStrings), nameof(LNStrings.DIVIDE_LABEL), nameof(LNStrings.DIVIDE_DESCRIPTION))]
-        public BindableNumber<int> Divide { get; set; } = new BindableInt(4)
+        [SettingSource(typeof(LNStrings), nameof(LNStrings.DIVISOR_LABEL), nameof(LNStrings.DIVISOR_DESCRIPTION))]
+        public BindableNumber<int> Divisor { get; set; } = new BindableInt(4)
         {
             MinValue = 1,
             MaxValue = 16,
@@ -97,7 +97,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
         {
             get
             {
-                yield return (LNStrings.DIVIDE_LABEL, $"1/{Divide.Value}");
+                yield return (LNStrings.DIVISOR_LABEL, $"1/{Divisor.Value}");
                 yield return (EzCommonModStrings.PERCENTAGE_LABEL, $"{Percentage.Value}%");
 
                 if (OriginalLN.Value) yield return (EzCommonModStrings.ORIGINAL_LN_LABEL, "On");
@@ -119,7 +119,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
     public static class LNStrings
     {
         public static readonly LocalisableString LN_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("LN转换器", "LN Transformer");
-        public static readonly LocalisableString DIVIDE_LABEL = new EzLocalizationManager.EzLocalisableString("分割", "Divide");
-        public static readonly LocalisableString DIVIDE_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("使用1/?", "Use 1/?");
+        public static readonly LocalisableString DIVISOR_LABEL = new EzLocalizationManager.EzLocalisableString("分割", "Divisor");
+        public static readonly LocalisableString DIVISOR_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("使用1/?", "Use 1/?");
     }
 }

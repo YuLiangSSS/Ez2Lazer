@@ -69,7 +69,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
                     double fullDuration = locations[i + 1].startTime - locations[i].startTime;
                     double beatLength = beatmap.ControlPointInfo.TimingPointAt(locations[i + 1].startTime).BeatLength;
                     // double beatBPM = beatmap.ControlPointInfo.TimingPointAt(locations[i + 1].startTime).BPM;
-                    double timeDivide = beatLength / Divide.Value; //beatBPM / 60 * 100 / Divide.Value;
+                    double timeDivide = beatLength / Divisor.Value; //beatBPM / 60 * 100 / Divide.Value;
                     double duration = rng.Next(100) < LongShort.Value ? fullDuration - timeDivide : timeDivide;
                     bool flag = true; // Can be transformed to LN
 
