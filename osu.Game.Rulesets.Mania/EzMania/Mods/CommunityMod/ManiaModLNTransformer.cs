@@ -14,6 +14,7 @@ using osu.Game.EzOsuGame.Mods;
 using osu.Game.Rulesets.Mania.Beatmaps;
 using osu.Game.Rulesets.Mania.Objects;
 using osu.Game.Rulesets.Mods;
+using osu.Game.Rulesets.Objects;
 
 // using osu.Framework.Logging;
 
@@ -48,6 +49,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
         {
             MinValue = -3,
             MaxValue = 10,
+            Precision = 1,
+        };
+
+        [SettingSource("LN Clean Divisor")]
+        public BindableInt CleanDivisor { get; set; } = new BindableInt(-1)
+        {
+            MinValue = -1,
+            MaxValue = 16,
             Precision = 1,
         };
 
@@ -121,77 +130,77 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
                     case -1:
                     {
                         double mu = -1;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 1, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 1, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 0:
                     {
                         double mu = 1;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 100, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 100, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 1:
                     {
                         double mu = 11; //LN duration μ
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 2:
                     {
                         double mu = 22;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 3:
                     {
                         double mu = 33;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 4:
                     {
                         double mu = 44;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 5:
                     {
                         double mu = 55;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 6:
                     {
                         double mu = 66;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 7:
                     {
                         double mu = 77;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.85, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 8:
                     {
                         double mu = 88;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.9, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 0.9, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
                     case 9:
                     {
                         double mu = 99;
-                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 1, Divide.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
+                        originalLNObjects = ManiaModYuModHelper.Transform(rng, mu, 1, Divisor.Value, Percentage.Value, Error, OriginalLN.Value, beatmap, newObjects, column);
                     }
                         break;
 
@@ -225,19 +234,24 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
                 // Beat length at the end of the hold note.
                 double beatLength = beatmap.ControlPointInfo.TimingPointAt(locations[i + 1].startTime).BeatLength;
                 bool flag = true;
-                double duration = fullDuration - beatLength / Divide.Value;
+                double duration = fullDuration - beatLength / Divisor.Value;
 
-                if (duration < beatLength / Divide.Value)
-                {
-                    duration = beatLength / Divide.Value;
-                }
-
-                if (duration > fullDuration - 3)
+                if (duration < 0)
                 {
                     flag = false;
                 }
 
-                if (OriginalLN.Value && locations[i].startTime != locations[i].endTime)
+                if (duration < beatLength / Divisor.Value)
+                {
+                    duration = beatLength / Divisor.Value;
+                }
+
+                if (duration > fullDuration - Error)
+                {
+                    flag = false;
+                }
+
+                if (OriginalLN.Value && locations[i].startTime != locations[i].endTime && flag)
                 {
                     newColumnObjects.AddNote(locations[i].samples, column.Key, locations[i].startTime, locations[i].endTime);
                     originalLNObjects.AddNote(locations[i].samples, column.Key, locations[i].startTime, locations[i].endTime);
@@ -323,6 +337,53 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
             return originalLNObjects;
         }
 
+        public List<ManiaHitObject> Clean(IBeatmap beatmap, List<ManiaHitObject> originalObjects, int cleanDivisor, Random rng)
+        {
+            if (cleanDivisor == -1)
+            {
+                return originalObjects;
+            }
+
+            List<ManiaHitObject> newObjects = new List<ManiaHitObject>();
+
+            for (int i = 0; i < originalObjects.Count - 1; i++)
+            {
+                if (originalObjects[i].GetEndTime() == originalObjects[i].StartTime)
+                {
+                    newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime);
+                    continue;
+                }
+
+                double fullDuration = originalObjects[i + 1].StartTime - originalObjects[i].StartTime;
+                double beatLength = beatmap.ControlPointInfo.TimingPointAt(originalObjects[i + 1].StartTime).BeatLength;
+                double duration = originalObjects[i].GetEndTime() - originalObjects[i].StartTime;
+                double gap = fullDuration - duration;
+                bool flag = true;
+
+                if (gap < beatLength / cleanDivisor - Error)
+                {
+                    duration = duration - (beatLength / cleanDivisor - gap);
+                    gap = fullDuration - duration;
+                }
+
+                if (duration < Error)
+                {
+                    flag = false;
+                }
+
+                if (flag)
+                {
+                    newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime, originalObjects[i].StartTime + duration);
+                }
+                else
+                {
+                    newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime);
+                }
+            }
+
+            return newObjects;
+        }
+
         [Obsolete]
         public void Invert(IBeatmap beatmap,
                            List<ManiaHitObject> newObjects,
@@ -338,11 +399,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 
             bool flag = true;
 
-            double duration = fullDuration - beatLength / Divide.Value;
+            double duration = fullDuration - beatLength / Divisor.Value;
 
-            if (duration < beatLength / Divide.Value)
+            if (duration < beatLength / Divisor.Value)
             {
-                duration = beatLength / Divide.Value;
+                duration = beatLength / Divisor.Value;
             }
 
             if (duration > fullDuration - 3)
