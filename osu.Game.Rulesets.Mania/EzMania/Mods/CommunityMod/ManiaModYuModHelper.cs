@@ -569,6 +569,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
             return list[rng.Next(list.Count)];
         }
 
+        public static void AddNote(this List<ManiaHitObject> obj, ManiaHitObject newObj)
+        {
+            obj.AddNote(newObj.Samples, newObj.Column, newObj.StartTime, newObj.GetEndTime());
+        }
+
         public static void AddNote(this List<ManiaHitObject> obj, IList<HitSampleInfo> samples, int column, double startTime, double? endTime = null)
         {
             if (endTime is null || endTime == startTime)
