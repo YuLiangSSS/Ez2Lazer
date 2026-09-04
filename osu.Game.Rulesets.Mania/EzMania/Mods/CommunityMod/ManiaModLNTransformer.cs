@@ -215,7 +215,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
             ManiaModYuModHelper.AfterTransform(newObjects, originalLNObjects, beatmap, rng, OriginalLN.Value, Gap.Value, SelectColumn.Value, DurationLimit.Value, LineSpacing.Value,
                 InvertLineSpacing.Value);
 
-            maniaBeatmap.HitObjects = CleanLN(maniaBeatmap, maniaBeatmap.HitObjects, CleanDivisor.Value, rng).ToList();
+            maniaBeatmap.HitObjects = CleanLN(maniaBeatmap, CleanDivisor.Value, rng).ToList();
 
             maniaBeatmap.Breaks.Clear();
         }
@@ -340,8 +340,10 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
             return originalLNObjects;
         }
 
-        public List<ManiaHitObject> CleanLN(IBeatmap beatmap, List<ManiaHitObject> originalObjects, int cleanDivisor, Random rng)
+        public List<ManiaHitObject> CleanLN(ManiaBeatmap maniaBeatmap, int cleanDivisor, Random rng)
         {
+            var originalObjects = maniaBeatmap.HitObjects;
+
             if (cleanDivisor == -1)
             {
                 return originalObjects;
@@ -349,39 +351,46 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 
             List<ManiaHitObject> newObjects = new List<ManiaHitObject>();
 
-            for (int i = 0; i < originalObjects.Count - 1; i++)
+            foreach (var column in maniaBeatmap.HitObjects.GroupBy(h => h.Column))
             {
-                if (originalObjects[i].GetEndTime() == originalObjects[i].StartTime)
+                var list = column.OrderBy(h => h.StartTime).ToList();
+
+                for (int i = 0; i < list.Count - 1; i++)
                 {
-                    newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime);
-                    continue;
+                    if (originalObjects[i].GetEndTime() == originalObjects[i].StartTime)
+                    {
+                        newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime);
+                        continue;
+                    }
+
+                    double fullDuration = originalObjects[i + 1].StartTime - originalObjects[i].StartTime;
+                    double beatLength = maniaBeatmap.ControlPointInfo.TimingPointAt(originalObjects[i + 1].StartTime).BeatLength;
+                    double duration = originalObjects[i].GetEndTime() - originalObjects[i].StartTime;
+                    double gap = fullDuration - duration;
+                    bool flag = true;
+
+                    if (gap < beatLength / cleanDivisor - Error)
+                    {
+                        duration = duration - (beatLength / cleanDivisor - gap);
+                        gap = fullDuration - duration;
+                    }
+
+                    if (duration < Error)
+                    {
+                        flag = false;
+                    }
+
+                    if (flag)
+                    {
+                        newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime, originalObjects[i].StartTime + duration);
+                    }
+                    else
+                    {
+                        newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime);
+                    }
                 }
 
-                double fullDuration = originalObjects[i + 1].StartTime - originalObjects[i].StartTime;
-                double beatLength = beatmap.ControlPointInfo.TimingPointAt(originalObjects[i + 1].StartTime).BeatLength;
-                double duration = originalObjects[i].GetEndTime() - originalObjects[i].StartTime;
-                double gap = fullDuration - duration;
-                bool flag = true;
-
-                if (gap < beatLength / cleanDivisor - Error)
-                {
-                    duration = duration - (beatLength / cleanDivisor - gap);
-                    gap = fullDuration - duration;
-                }
-
-                if (duration < Error)
-                {
-                    flag = false;
-                }
-
-                if (flag)
-                {
-                    newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime, originalObjects[i].StartTime + duration);
-                }
-                else
-                {
-                    newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime);
-                }
+                newObjects.AddNote(list[^1]);
             }
 
             return newObjects;
