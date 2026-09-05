@@ -215,7 +215,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
             ManiaModYuModHelper.AfterTransform(newObjects, originalLNObjects, beatmap, rng, OriginalLN.Value, Gap.Value, SelectColumn.Value, DurationLimit.Value, LineSpacing.Value,
                 InvertLineSpacing.Value);
 
-            maniaBeatmap.HitObjects = CleanLN(maniaBeatmap, CleanDivisor.Value, rng).ToList();
+            maniaBeatmap.HitObjects = CleanLN(maniaBeatmap, CleanDivisor.Value, rng).OrderBy(h => h.StartTime).ToList();
 
             maniaBeatmap.Breaks.Clear();
         }
@@ -342,11 +342,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 
         public List<ManiaHitObject> CleanLN(ManiaBeatmap maniaBeatmap, int cleanDivisor, Random rng)
         {
-            var originalObjects = maniaBeatmap.HitObjects;
-
             if (cleanDivisor == 0)
             {
-                return originalObjects;
+                return maniaBeatmap.HitObjects;
             }
 
             List<ManiaHitObject> newObjects = new List<ManiaHitObject>();
