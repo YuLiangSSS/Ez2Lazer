@@ -53,9 +53,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
         };
 
         [SettingSource("LN Clean Divisor")]
-        public BindableInt CleanDivisor { get; set; } = new BindableInt(-1)
+        public BindableInt CleanDivisor { get; set; } = new BindableInt(0)
         {
-            MinValue = -1,
+            MinValue = 0,
             MaxValue = 16,
             Precision = 1,
         };
@@ -344,7 +344,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
         {
             var originalObjects = maniaBeatmap.HitObjects;
 
-            if (cleanDivisor == -1)
+            if (cleanDivisor == 0)
             {
                 return originalObjects;
             }
@@ -357,15 +357,15 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 
                 for (int i = 0; i < list.Count - 1; i++)
                 {
-                    if (originalObjects[i].GetEndTime() == originalObjects[i].StartTime)
+                    if (list[i].GetEndTime() == list[i].StartTime)
                     {
-                        newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime);
+                        newObjects.AddNote(list[i].Samples, list[i].Column, list[i].StartTime);
                         continue;
                     }
 
-                    double fullDuration = originalObjects[i + 1].StartTime - originalObjects[i].StartTime;
-                    double beatLength = maniaBeatmap.ControlPointInfo.TimingPointAt(originalObjects[i + 1].StartTime).BeatLength;
-                    double duration = originalObjects[i].GetEndTime() - originalObjects[i].StartTime;
+                    double fullDuration = list[i + 1].StartTime - list[i].StartTime;
+                    double beatLength = maniaBeatmap.ControlPointInfo.TimingPointAt(list[i + 1].StartTime).BeatLength;
+                    double duration = list[i].GetEndTime() - list[i].StartTime;
                     double gap = fullDuration - duration;
                     bool flag = true;
 
@@ -382,11 +382,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 
                     if (flag)
                     {
-                        newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime, originalObjects[i].StartTime + duration);
+                        newObjects.AddNote(list[i].Samples, list[i].Column, list[i].StartTime, list[i].StartTime + duration);
                     }
                     else
                     {
-                        newObjects.AddNote(originalObjects[i].Samples, originalObjects[i].Column, originalObjects[i].StartTime);
+                        newObjects.AddNote(list[i].Samples, list[i].Column, list[i].StartTime);
                     }
                 }
 
