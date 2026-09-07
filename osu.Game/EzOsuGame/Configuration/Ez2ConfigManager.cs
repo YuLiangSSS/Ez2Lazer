@@ -162,6 +162,9 @@ namespace osu.Game.EzOsuGame.Configuration
             // Ez 技能：默认与 EzDanAlgorithm.LN_CHART_MIN_HOLD_OBJECTS 一致。
             SetDefault(Ez2Setting.SkillLnChartMinHoldObjects, 150, 0, 1000);
 
+            // 悬停联动：鼠标移到左侧标题 / 详情 / 排行榜区域时，右侧谱面传送带滚动定位到当前选中谱面（fluXis 同款悬停联动）。
+            SetDefault(Ez2Setting.EzSongSelectHoverSyncCarousel, true);
+
             #endregion
 
             #region 音频与输入
@@ -1076,6 +1079,11 @@ namespace osu.Game.EzOsuGame.Configuration
 
         EzSelectCsMode,
         ColumnTypeListSelect,
+
+        /// <summary>
+        /// 选歌界面：鼠标悬停左侧标题 / 详情 / 排行榜区域时，右侧谱面传送带自动滚动并定位到当前选中的谱面（fluXis 同款悬停联动）。
+        /// </summary>
+        EzSongSelectHoverSyncCarousel,
 
         // 音频与输入
         AsioSampleRate,

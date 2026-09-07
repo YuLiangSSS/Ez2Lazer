@@ -180,6 +180,12 @@ namespace osu.Game.Screens.Select
         private Bindable<KeySoundPreviewMode> keySoundPreview = null!;
         private EzPreviewTrackManager ezPreviewManager = null!;
 
+        /// <summary>
+        /// Ez 设置「选歌界面悬停联动传送带」：当鼠标移动到左侧标题 / 详情 / 排行榜区域时，
+        /// 右侧谱面传送带自动滚动并定位到当前选中的谱面（fluXis 同款悬停联动）。
+        /// </summary>
+        private Bindable<bool> ezSongSelectHoverSyncCarousel = null!;
+
         private EzBeatmapPreviewOverlay ezBeatmapPreviewOverlay = null!;
         private ModSettingChangeTracker? previewOverlayModSettingTracker;
         private CancellationTokenSource? previewPlayableCancellation;
@@ -242,11 +248,7 @@ namespace osu.Game.Screens.Select
                                                         // Pad enough to only reset scroll when well into the left wedge areas.
                                                         Padding = new MarginPadding { Right = 40 },
                                                         RelativeSizeAxes = Axes.Both,
-                                                        Child = new LeftSideInteractionContainer(() =>
-                                                        {
-                                                            if (!carousel.UserScrolling)
-                                                                carousel.ScrollToSelection();
-                                                        })
+                                                        Child = new LeftSideInteractionContainer(onCarouselResetRequestedFromLeftSide)
                                                         {
                                                             RelativeSizeAxes = Axes.Both,
                                                         },
@@ -362,6 +364,25 @@ namespace osu.Game.Screens.Select
 
             keySoundPreview = ezConfig.GetBindable<KeySoundPreviewMode>(Ez2Setting.KeySoundPreviewMode);
             showConvertedBeatmaps = config.GetBindable<bool>(OsuSetting.ShowConvertedBeatmaps);
+
+            ezSongSelectHoverSyncCarousel = ezConfig.GetBindable<bool>(Ez2Setting.EzSongSelectHoverSyncCarousel);
+        }
+
+        /// <summary>
+        /// 当光标进入选歌界面左侧（标题 / 详情 / 排行榜）区域时被调用（fluXis 同款悬停联动）。
+        /// 若「选歌界面悬停联动传送带」设置开启，则让右侧谱面传送带平滑滚动到当前选中的谱面；
+        /// 若用户正在按住鼠标拖动（如按住右键对传送带绝对滚动），则不打断其操作。
+        /// </summary>
+        private void onCarouselResetRequestedFromLeftSide()
+        {
+            if (!ezSongSelectHoverSyncCarousel.Value)
+                return;
+
+            // 正在用鼠标拖动 / 按住按键时不打断用户操作。
+            if (inputManager?.CurrentState.Mouse.Buttons.HasAnyButtonPressed != false)
+                return;
+
+            carousel.ScrollToSelection();
         }
 
         // Colour scheme for mod overlay is left as default (green) to match mods button.

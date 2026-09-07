@@ -86,6 +86,15 @@ namespace osu.Game.EzOsuGame.Overlays
                 },
                 new SettingsItemV2(new FormCheckBox
                 {
+                    Caption = EzSettingsStrings.SONG_SELECT_HOVER_SYNC_CAROUSEL,
+                    HintText = EzSettingsStrings.SONG_SELECT_HOVER_SYNC_CAROUSEL_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.EzSongSelectHoverSyncCarousel),
+                })
+                {
+                    Keywords = new[] { "song select", "hover", "carousel", "scroll", "leaderboard", "sync", "选歌", "悬停", "传送带", "联动", "排行" }
+                },
+                new SettingsItemV2(new FormCheckBox
+                {
                     Caption = EzSettingsStrings.STORYBOARD_VIDEO_AUTO_SIZE,
                     HintText = EzSettingsStrings.STORYBOARD_VIDEO_AUTO_SIZE_TOOLTIP,
                     Current = ezConfig.GetBindable<bool>(Ez2Setting.StoryboardAutoVideoSize),

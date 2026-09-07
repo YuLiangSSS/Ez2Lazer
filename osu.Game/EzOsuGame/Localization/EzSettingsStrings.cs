@@ -86,6 +86,17 @@ namespace osu.Game.EzOsuGame.Localization
             "When enabled, the digits of Accuracy, Score, MaxCombo, PP and each judgement count in the song select leaderboard, "
             + "the in-game break/pause/fail screens and the results screen are replaced with asterisks; other symbols (e.g. %, x, /, ,) remain unchanged.");
 
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_HOVER_SYNC_CAROUSEL =
+            new EzLocalizationManager.EzLocalisableString("选歌界面悬停联动传送带", "Song select hover-sync carousel");
+
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_HOVER_SYNC_CAROUSEL_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "当鼠标移动到左侧的标题 / 详情 / 排行榜区域时，右侧的谱面传送带会自动滚动并定位到当前选中的谱面"
+            + "（与 fluXis 的悬停联动一致，方便在浏览列表后快速找回当前谱面）。\n关闭后，悬停将不再触发联动滚动，传送带会停留在你滚动到的位置。",
+            "When the mouse moves over the left title / details / leaderboard area, the chart carousel on the right automatically "
+            + "scrolls to and centres the currently selected chart (same hover-sync behaviour as fluXis — handy for relocating the "
+            + "current chart after browsing the list).\nWhen disabled, hovering no longer triggers the sync scroll and the carousel "
+            + "stays wherever you scrolled it.");
+
         public static readonly EzLocalizationManager.EzLocalisableString TURBO_MODE =
             new EzLocalizationManager.EzLocalisableString("极速模式", "Turbo mode");
 
