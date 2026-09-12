@@ -29,6 +29,7 @@ using osu.Game.Graphics.Containers;
 using osu.Game.IO.Archives;
 using osu.Game.EzOsuGame.Audio;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Mods;
 using osu.Game.EzOsuGame.LocalProfile;
 using osu.Game.EzOsuGame.Performance;
 using osu.Game.EzOsuGame.Scoring;
@@ -307,6 +308,10 @@ namespace osu.Game.Screens.Play
 
             if (playableBeatmap == null)
                 return;
+
+            // [Ez] 谱面转换期间为空种子掷出的随机值，在这里写回本次游玩的 mod 副本（不是 mod 设置界面的绑定）。
+            // 这样成绩会记录实际使用的种子，回放与成绩重算可复现，而设置界面的种子输入框保持为空。
+            EzModSeed.MaterialiseSeeds(gameplayMods);
 
             if (!ModUtils.CheckModsBelongToRuleset(ruleset, gameplayMods))
             {

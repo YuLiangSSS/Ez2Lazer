@@ -49,7 +49,6 @@ using osu.Game.EzOsuGame.ExternalRulesets;
 using osu.Game.EzOsuGame.Fonts;
 using osu.Game.EzOsuGame.Input;
 using osu.Game.EzOsuGame.LocalProfile;
-using osu.Game.EzOsuGame.Mods;
 using osu.Game.EzOsuGame.Online;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Skills;
@@ -731,9 +730,6 @@ namespace osu.Game
 
             ensureFrameLimiterDisplayModeBinding();
             scheduleFrameLimiterApply();
-
-            // Nullable mod Seed writes must reach SettingsNumberBox on the update thread only.
-            EzModSeed.BindUpdateScheduler(Host.UpdateThread.Scheduler);
         }
 
         protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent) =>

@@ -14,6 +14,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Localization;
+using osu.Game.EzOsuGame.Mods;
 using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets.Mania.Beatmaps;
 using osu.Game.Rulesets.Mania.Objects;
@@ -229,7 +230,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.LAsMods
                 // 计算实际的源列数（以源 HitObjects 中出现的最大列号为准），避免传入的 totalColumns 失准导致空列
                 int sourceColumns = sourceHitObjects.Count > 0 ? sourceHitObjects.Max(h => h.Column) + 1 : totalColumns;
 
-                int oscSeed = Seed.Value ?? RNG.Next();
+                int oscSeed = EzModSeed.Resolve(Seed);
                 var random = new Random(oscSeed);
 
                 for (int targetPos = 0; targetPos < reorderRule.Length; targetPos++)

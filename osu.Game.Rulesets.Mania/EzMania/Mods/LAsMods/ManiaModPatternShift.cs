@@ -450,7 +450,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.LAsMods
             const int center = 5;
             int delta = stars - center;
 
-            int oscSeed = Seed.Value ?? RNG.Next();
+            int oscSeed = EzModSeed.Resolve(Seed);
             var osc = new EzOscillator(oscSeed);
 
             if (notes.Count == 0)

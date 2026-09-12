@@ -89,7 +89,8 @@ namespace osu.Game.EzOsuGame.Skills
                 return null;
 
             mods ??= Array.Empty<Mod>();
-            // EzModSeed.Resolve makes Seed writes update-thread safe; use SelectedMods as-is so UI seed matches.
+            // SelectedMods are used as-is; EzModSeed.Resolve never writes an auto-rolled seed back into the
+            // mod settings bindable, so this live analysis cannot fill the mod seed text box.
             float rate = EzModRate.Resolve(mods);
 
             var working = beatmapManager.GetWorkingBeatmap(beatmapInfo);
