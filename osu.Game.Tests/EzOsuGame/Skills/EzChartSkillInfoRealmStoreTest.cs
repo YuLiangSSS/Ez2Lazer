@@ -361,6 +361,26 @@ namespace osu.Game.Tests.EzOsuGame.Skills
         }
 
         [Test]
+        public void A_settled_unrateable_msd_is_not_served_as_axis_input()
+        {
+            RunTestWithRealm((realm, _) =>
+            {
+                var store = new EzSkillStore(realm);
+                const string dead_hash = "unrateable-msd-hash";
+                const string live_hash = "rated-msd-hash";
+
+                store.WriteBeatmapMsdUnrateable(dead_hash, Guid.NewGuid());
+                store.WriteBeatmapMsd(live_hash, new EzSkillsetVector(10, 1, 2, 3, 4, 5, 6, 7), holdRatio: 0.2);
+
+                var provider = new EzSkillProvider(store);
+
+                Assert.That(provider.GetBeatmapMsd(dead_hash), Is.Empty,
+                    "the settled marker is a verdict, not an axis set: feeding it to the CSI computer is what stamped a row for a chart the engine refused");
+                Assert.That(provider.GetBeatmapMsd(live_hash)[EzMinaSkillAxis.Overall.ToMsdSkillId()], Is.EqualTo(10).Within(1e-9));
+            });
+        }
+
+        [Test]
         public void File_schema_version_is_ez10()
         {
             Assert.That(RealmAccess.EZ_REALM_SCHEMA_VERSION, Is.EqualTo(10));
