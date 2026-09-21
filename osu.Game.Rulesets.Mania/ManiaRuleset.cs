@@ -317,6 +317,7 @@ namespace osu.Game.Rulesets.Mania
                         new ManiaModJudgmentsAdjust(),
                         new ManiaModRandomJudgement(),
                         new ManiaModRandomOverallDifficulty(),
+                        new ManiaModRandomOverallDifficultyFromOrigin(),
                         new ManiaModLNJudgementAdjust(),
                         new ManiaModLNTransformer(),
                         new ManiaModLNDoubleDistribution(),
