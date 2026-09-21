@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
@@ -10,6 +10,7 @@ using osu.Framework.Graphics.Shapes;
 using osu.Framework.Input.Events;
 using osu.Game.Beatmaps.Drawables;
 using osu.Game.Configuration;
+using osu.Game.EzOsuGame.Localization;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Input.Bindings;
@@ -47,6 +48,8 @@ namespace osu.Game.Overlays.BeatmapListing
 
         public Bindable<SearchPlayed> Played => playedFilter.Current;
 
+        public Bindable<SearchOwned> Local => localFilter.Current;
+
         public Bindable<SearchExplicit> ExplicitContent => explicitContentFilter.Current;
 
         public APIBeatmapSet? BeatmapSet
@@ -73,6 +76,7 @@ namespace osu.Game.Overlays.BeatmapListing
         private readonly BeatmapSearchMultipleSelectionFilterRow<SearchExtra> extraFilter;
         private readonly BeatmapSearchScoreFilterRow ranksFilter;
         private readonly BeatmapSearchFilterRow<SearchPlayed> playedFilter;
+        private readonly BeatmapSearchFilterRow<SearchOwned> localFilter;
         private readonly BeatmapSearchFilterRow<SearchExplicit> explicitContentFilter;
 
         private readonly Box background;
@@ -137,6 +141,7 @@ namespace osu.Game.Overlays.BeatmapListing
                                     extraFilter = new BeatmapSearchMultipleSelectionFilterRow<SearchExtra>(BeatmapsStrings.ListingSearchFiltersExtra),
                                     ranksFilter = new BeatmapSearchScoreFilterRow(),
                                     playedFilter = new BeatmapSearchFilterRow<SearchPlayed>(BeatmapsStrings.ListingSearchFiltersPlayed),
+                                    localFilter = new BeatmapSearchFilterRow<SearchOwned>(EzBeatmapListingStrings.LOCAL_FILTER_HEADER),
                                     explicitContentFilter = new BeatmapSearchFilterRow<SearchExplicit>(BeatmapsStrings.ListingSearchFiltersNsfw),
                                 }
                             }

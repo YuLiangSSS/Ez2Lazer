@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 #nullable disable
@@ -15,8 +15,10 @@ using osu.Framework.Graphics.Effects;
 using osu.Framework.Graphics.Shapes;
 using osu.Framework.Localisation;
 using osu.Framework.Threading;
+using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Drawables.Cards;
 using osu.Game.Configuration;
+using osu.Game.Database;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Online.API.Requests.Responses;
@@ -71,6 +73,12 @@ namespace osu.Game.Overlays.BeatmapListing
 
         [Resolved]
         private IAPIProvider api { get; set; }
+
+        /// <summary>
+        /// 在线接口不支持按本地谱面过滤，因此「本地谱面」筛选（<see cref="SearchOwned"/>）在客户端完成。
+        /// </summary>
+        [Resolved(CanBeNull = true)]
+        private RealmAccess realm { get; set; }
 
         private IBindable<APIUser> apiUser;
 
@@ -176,6 +184,7 @@ namespace osu.Game.Overlays.BeatmapListing
             searchControl.Extra.CollectionChanged += (_, _) => queueUpdateSearch();
             searchControl.Ranks.CollectionChanged += (_, _) => queueUpdateSearch();
             searchControl.Played.BindValueChanged(_ => queueUpdateSearch());
+            searchControl.Local.BindValueChanged(_ => queueUpdateSearch());
             searchControl.ExplicitContent.BindValueChanged(_ => queueUpdateSearch());
 
             sortControl.Current.BindValueChanged(_ => queueUpdateSearch());
@@ -274,11 +283,46 @@ namespace osu.Game.Overlays.BeatmapListing
                     }
                 }
 
+                sets = applyLocalFilter(sets);
+
                 var resultsReturned = SearchResult.ResultsReturned(sets);
                 SearchFinished?.Invoke(resultsReturned);
             };
 
             api.Queue(getSetsRequest);
+        }
+
+        /// <summary>
+        /// Applies the client-side "local beatmaps" filter (see <see cref="SearchOwned"/>) to the currently selected value.
+        /// </summary>
+        /// <remarks>
+        /// Filtering is applied to each page as it arrives, so pages where every beatmap set is already available locally
+        /// will simply display fewer (or no) cards. Scrolling on to the next page continues to work as usual.
+        /// </remarks>
+        private List<APIBeatmapSet> applyLocalFilter(List<APIBeatmapSet> sets)
+        {
+            SearchOwned localFilter = searchControl.Local.Value;
+
+            if (localFilter == SearchOwned.Any || realm == null || sets.Count == 0)
+                return sets;
+
+            // a beatmap set counts as downloaded if it is present locally and not marked for deletion,
+            // matching the "locally available" state shown by the beatmap cards themselves.
+            // note that the lookups are performed one by one as realm's LINQ provider does not support collection containment checks.
+            HashSet<int> locallyOwnedIds = realm.Run(r =>
+            {
+                HashSet<int> ids = new HashSet<int>();
+
+                foreach (int onlineId in sets.Select(s => s.OnlineID))
+                {
+                    if (r.All<BeatmapSetInfo>().Any(s => s.OnlineID == onlineId && !s.DeletePending))
+                        ids.Add(onlineId);
+                }
+
+                return ids;
+            });
+
+            return sets.Where(s => locallyOwnedIds.Contains(s.OnlineID) == (localFilter == SearchOwned.Owned)).ToList();
         }
 
         private void resetSearch()

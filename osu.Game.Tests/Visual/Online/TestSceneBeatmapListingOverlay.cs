@@ -10,6 +10,7 @@ using NUnit.Framework;
 using osu.Framework.Allocation;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Testing;
+using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Drawables.Cards;
 using osu.Game.Configuration;
 using osu.Game.Graphics.Containers;
@@ -372,6 +373,35 @@ namespace osu.Game.Tests.Visual.Online
             });
         }
 
+        [Test]
+        public void TestLocalFilter()
+        {
+            APIBeatmapSet localSet = null;
+            APIBeatmapSet remoteSet = null;
+
+            AddStep("show one local and one remote beatmap", () =>
+            {
+                localSet = CreateAPIBeatmapSet(Ruleset.Value);
+                remoteSet = CreateAPIBeatmapSet(Ruleset.Value);
+
+                fetchFor(localSet, remoteSet);
+            });
+            assertCardCount(2);
+
+            AddStep("make one beatmap locally available", () => Realm.Write(r => r.Add(new BeatmapSetInfo { OnlineID = localSet.OnlineID })));
+
+            AddStep("filter to downloaded", () => setLocalFilter(SearchOwned.Owned));
+            assertCardCount(1);
+            AddAssert("only the downloaded beatmap is shown", () => this.ChildrenOfType<BeatmapCard>().Single().BeatmapSet.OnlineID == localSet.OnlineID);
+
+            AddStep("filter to not downloaded", () => setLocalFilter(SearchOwned.NotOwned));
+            assertCardCount(1);
+            AddAssert("only the not downloaded beatmap is shown", () => this.ChildrenOfType<BeatmapCard>().Single().BeatmapSet.OnlineID == remoteSet.OnlineID);
+
+            AddStep("filter to any", () => setLocalFilter(SearchOwned.Any));
+            assertCardCount(2);
+        }
+
         private static int searchCount;
 
         private APIBeatmapSet[] getManyBeatmaps(int count) => Enumerable.Range(0, count).Select(_ => CreateAPIBeatmapSet(Ruleset.Value)).ToArray();
@@ -405,6 +435,16 @@ namespace osu.Game.Tests.Visual.Online
         private void setPlayedFilter(SearchPlayed played)
         {
             AddStep($"set Played filter to {played}", () => searchControl.Played.Value = played);
+        }
+
+        private void setLocalFilter(SearchOwned owned)
+        {
+            searchControl.Local.Value = owned;
+        }
+
+        private void assertCardCount(int expected)
+        {
+            AddUntilStep($"{expected} beatmap cards shown", () => this.ChildrenOfType<BeatmapCard>().Count() == expected);
         }
 
         private void supporterRequiredPlaceholderShown()
