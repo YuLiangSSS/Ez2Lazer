@@ -11,6 +11,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.Mods;
+using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets.Mania.Mods;
 using osu.Game.Rulesets.Mods;
 
@@ -23,11 +24,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
     /// OD 在 <c>IApplicableToDifficulty</c> 阶段写入，早于音符 <c>ApplyDefaults</c> 时用 OD 烘焙判定区间，
     /// 因此所有物件的判定区间都会跟着随机 OD 一起变化；随机值只取决于种子，游玩 / 回放 / 成绩重算一致。
     /// </remarks>
-    public class ManiaModRandomOverallDifficulty : Mod, IApplicableToDifficulty, IHasSeed
+    public class ManiaModRandomOverallDifficultyFromOrigin : Mod, IApplicableToDifficulty, IHasSeed
     {
-        public override string Name => "Random OD";
+        public override string Name => "Random OD From Origin";
 
-        public override string Acronym => "ROD";
+        public override string Acronym => "RF";
 
         public override LocalisableString Description => RandomOverallDifficultyStrings.DESCRIPTION;
 
@@ -53,7 +54,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
         /// <summary>
         /// 随机种子；留空时每次游玩重新掷一次。
         /// </summary>
-        [SettingSource(typeof(EzCommonModStrings), nameof(EzCommonModStrings.SEED_LABEL), nameof(EzCommonModStrings.SEED_DESCRIPTION))]
+        [SettingSource(typeof(EzCommonModStrings), nameof(EzCommonModStrings.SEED_LABEL), nameof(EzCommonModStrings.SEED_DESCRIPTION), SettingControlType = typeof(SettingsNumberBox))]
         public Bindable<int?> Seed { get; } = new Bindable<int?>();
 
         /// <summary>
@@ -64,7 +65,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
         {
             MinValue = 0,
             MaxValue = 10,
-            Precision = 0.5
+            Precision = 0.1
         };
 
         /// <summary>
@@ -101,7 +102,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
 
             double offset = (rng.NextDouble() * 2 - 1) * Range.Value;
 
-            return Math.Clamp(baseOverallDifficulty + offset, 0, 10);
+            return baseOverallDifficulty + offset;
         }
 
         public override void ResetSettingsToDefaults()
