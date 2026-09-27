@@ -367,6 +367,8 @@ namespace osu.Game
             dependencies.CacheAs(LocalConfig);
             dependencies.CacheAs<IGameplaySettings>(LocalConfig);
 
+            // The catalog scan opens every installed font; reuse the persisted name map when possible.
+            EzSystemFontCatalog.AttachCache(Storage);
             InitialiseFonts();
             EzUiFontBootstrap.Apply(this, Ez2ConfigManager);
 
@@ -374,7 +376,7 @@ namespace osu.Game
 
             Audio.Samples.PlaybackConcurrency = SAMPLE_CONCURRENCY;
 
-            dependencies.Cache(SkinManager = new SkinManager(Storage, realm, Host, Resources, Audio, Scheduler));
+            dependencies.Cache(SkinManager = new SkinManager(Storage, realm, Host, Resources, Audio, Scheduler, Ez2ConfigManager));
             dependencies.CacheAs<ISkinSource>(SkinManager);
 
             EndpointConfiguration endpoints = CreateEndpoints();
