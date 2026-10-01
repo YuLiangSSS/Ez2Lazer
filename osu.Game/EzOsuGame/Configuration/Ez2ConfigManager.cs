@@ -130,6 +130,12 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.StoryboardAutoVideoSize, false);
             SetDefault(Ez2Setting.AcrylicUiEnabled, false);
             SetDefault(Ez2Setting.AcrylicUiBlurStrength, 16.0, 0.0, 40.0, 1.0);
+
+            // 选歌界面背景暗度：默认沿用官方固定值 0.1，不改变开箱观感。
+            SetDefault(Ez2Setting.SongSelectBackgroundDim, 0.1f, 0f, 1f, 0.01f);
+
+            // 选歌界面传送带卡片封面暗度：默认 0，保持官方观感。
+            SetDefault(Ez2Setting.SongSelectCoverDim, 0f, 0f, 1f, 0.01f);
             SetDefault(Ez2Setting.UiFontDefault, string.Empty);
             SetDefault(Ez2Setting.UiFontDefaultLocalized, string.Empty);
             SetDefault(Ez2Setting.UiFontTitleAlternate, string.Empty);
@@ -1008,6 +1014,18 @@ namespace osu.Game.EzOsuGame.Configuration
         StoryboardAutoVideoSize,
         AcrylicUiEnabled,
         AcrylicUiBlurStrength,
+
+        /// <summary>
+        /// 选歌界面谱面背景图的暗度（0 = 不压暗，1 = 全黑）。独立于游玩中的「背景暗度」
+        /// （<see cref="OsuSetting.DimLevel"/>），毛玻璃 UI 开/关都使用本值。
+        /// </summary>
+        SongSelectBackgroundDim,
+
+        /// <summary>
+        /// 选歌界面右侧谱面传送带卡片封面的额外压暗量（0 = 保持官方观感，1 = 全黑）。
+        /// 叠加在官方既有的明暗层之上；毛玻璃 UI 开启时卡片不绘制封面，本项不生效。
+        /// </summary>
+        SongSelectCoverDim,
 
         /// <summary>English / Latin system font for default UI (empty = built-in Torus BMFont).</summary>
         UiFontDefault,

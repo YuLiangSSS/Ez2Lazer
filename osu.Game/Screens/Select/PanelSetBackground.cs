@@ -36,8 +36,10 @@ namespace osu.Game.Screens.Select
         private double timeSinceUnpool;
 
         private Bindable<bool> acrylicUiEnabled = null!;
+        private Bindable<float> coverDim = null!;
         private Box gradientBackground = null!;
         private FillFlowContainer darkOverlays = null!;
+        private Box coverDimLayer = null!;
 
         public WorkingBeatmap? Beatmap
         {
@@ -97,6 +99,7 @@ namespace osu.Game.Screens.Select
         private void load(OverlayColourProvider colourProvider, Ez2ConfigManager ezConfig)
         {
             acrylicUiEnabled = ezConfig.GetBindable<bool>(Ez2Setting.AcrylicUiEnabled);
+            coverDim = ezConfig.GetBindable<float>(Ez2Setting.SongSelectCoverDim);
 
             InternalChildren = new Drawable[]
             {
@@ -138,6 +141,15 @@ namespace osu.Game.Screens.Select
                         },
                     }
                 },
+                // [Ez] 传送带封面额外压暗层（Ez 设置「选歌界面传送带封面暗度」）。
+                // 叠在官方明暗渐变之上，默认 0 时不改变官方观感。
+                coverDimLayer = new Box
+                {
+                    Depth = -2,
+                    RelativeSizeAxes = Axes.Both,
+                    Colour = Color4.Black,
+                    Alpha = 0,
+                },
             };
 
             // Glass N is on Panel parent; hide classic layers when acrylic is on.
@@ -166,8 +178,18 @@ namespace osu.Game.Screens.Select
                     loadCancellation?.Cancel();
                     loadCancellation = null;
                 }
+
+                updateCoverDim();
             }, true);
+
+            coverDim.BindValueChanged(_ => updateCoverDim());
         }
+
+        /// <summary>
+        /// 按 Ez 设置「选歌界面传送带封面暗度」压暗卡片封面。
+        /// 毛玻璃 UI 下卡片不绘制封面（见 <see cref="loadContentIfRequired"/>），压暗层一并隐藏。
+        /// </summary>
+        private void updateCoverDim() => coverDimLayer.Alpha = acrylicUiEnabled.Value ? 0f : coverDim.Value;
 
         private void loadContentIfRequired()
         {

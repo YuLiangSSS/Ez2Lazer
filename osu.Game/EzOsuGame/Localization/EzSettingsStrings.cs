@@ -174,6 +174,30 @@ namespace osu.Game.EzOsuGame.Localization
             "选歌界面毛玻璃面板的模糊强度。总开关关闭时不生效。",
             "Blur strength for song select acrylic panels. Has no effect when acrylic UI is disabled.");
 
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_BACKGROUND_DIM =
+            new EzLocalizationManager.EzLocalisableString("选歌界面背景暗度", "Song select background dim");
+
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_BACKGROUND_DIM_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "压暗选歌界面的谱面背景图：0% 为不压暗，100% 为全黑。"
+            + "\n与游玩中的「背景暗度」相互独立，游玩中的那项只影响游玩画面。"
+            + "\n默认 10% 为官方的固定值；毛玻璃 UI 开启时同样生效。"
+            + "\n「选歌界面背景虚化」只控制模糊，与本项无关。",
+            "Darkens the beatmap background artwork on song select: 0% is no dim, 100% is fully black."
+            + "\nIndependent of the gameplay \"Background dim\" setting, which only affects gameplay."
+            + "\nThe default of 10% is the official fixed value; this also applies while acrylic UI is enabled."
+            + "\n\"Background blur\" only controls blur and is unrelated to this setting.");
+
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_COVER_DIM =
+            new EzLocalizationManager.EzLocalisableString("选歌界面传送带封面暗度", "Song select carousel cover dim");
+
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_COVER_DIM_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "额外压暗右侧谱面传送带卡片的封面图，用于降低亮图刺眼程度：0% 为保持官方观感，100% 为全黑。"
+            + "\n叠加在官方既有的明暗层次之上，所以 0% 也仍保留卡片本身的渐变。"
+            + "\n开启毛玻璃 UI 后卡片不再绘制封面（改用玻璃底板），本项不生效。",
+            "Additionally darkens the cover artwork of the chart cards in the right-hand carousel: 0% keeps the official look, 100% is fully black."
+            + "\nThis is layered on top of the existing official shading, so 0% still keeps the card's own gradient."
+            + "\nWith acrylic UI enabled the cards no longer draw cover artwork (they use a glass surface instead), so this has no effect.");
+
         public static readonly EzLocalizationManager.EzLocalisableString UI_FONT_MODIFY =
             new EzLocalizationManager.EzLocalisableString("修改字体", "Modify fonts");
 

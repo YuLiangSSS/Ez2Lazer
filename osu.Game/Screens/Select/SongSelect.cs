@@ -177,6 +177,12 @@ namespace osu.Game.Screens.Select
         private Bindable<bool> configBackgroundBlur = null!;
         private Bindable<bool> acrylicUiEnabled = null!;
         private Bindable<bool> showConvertedBeatmaps = null!;
+
+        /// <summary>
+        /// Ez 设置「选歌界面背景暗度」：仅作用于选歌界面，与游玩中的 <see cref="OsuSetting.DimLevel"/> 相互独立。
+        /// </summary>
+        private Bindable<float> songSelectBackgroundDim = null!;
+
         private Bindable<KeySoundPreviewMode> keySoundPreview = null!;
         private EzPreviewTrackManager ezPreviewManager = null!;
 
@@ -355,6 +361,15 @@ namespace osu.Game.Screens.Select
 
             configBackgroundBlur = config.GetBindable<bool>(OsuSetting.SongSelectBackgroundBlur);
             configBackgroundBlur.BindValueChanged(e =>
+            {
+                if (!this.IsCurrentScreen())
+                    return;
+
+                updateBackgroundDim();
+            });
+
+            songSelectBackgroundDim = ezConfig.GetBindable<float>(Ez2Setting.SongSelectBackgroundDim);
+            songSelectBackgroundDim.BindValueChanged(_ =>
             {
                 if (!this.IsCurrentScreen())
                     return;
@@ -962,6 +977,10 @@ namespace osu.Game.Screens.Select
             updateWedgeVisibility();
 
             endLooping();
+
+            // [Ez] 自定义的选歌界面暗度只应在选歌界面生效：离开时还原成官方固定值，
+            // 否则接下来的 PlayerLoader / 结算等界面会继承它。放在最后，确保晚于 restoreBackground() 的暗度重算。
+            ApplyToBackground(b => b.DimWhenUserSettingsIgnored.Value = detached_background_dim);
         }
 
         protected override void LogoArriving(OsuLogo logo, bool resuming)
@@ -1037,21 +1056,20 @@ namespace osu.Game.Screens.Select
             }
         }
 
+        /// <summary>
+        /// 官方选歌界面写死的背景暗度。离开选歌界面时把背景的 DimWhenUserSettingsIgnored 还原成该值，
+        /// 因为该 bindable 会被 PlayerLoader 等界面继承（它们只改 IgnoreUserSettings，不改暗度）。
+        /// </summary>
+        private const float detached_background_dim = 0.1f;
+
         private void updateBackgroundDim() => ApplyToBackground(backgroundModeBeatmap =>
         {
             backgroundModeBeatmap.Beatmap = Beatmap.Value;
 
-            // [Ez] Only while acrylic UI is on: apply gameplay DimLevel / BlurLevel.
-            // Off = official IgnoreUserSettings path (fixed 0.1 dim; SongSelectBackgroundBlur only).
-            if (acrylicUiEnabled.Value)
-            {
-                backgroundModeBeatmap.IgnoreUserSettings.Value = false;
-            }
-            else
-            {
-                backgroundModeBeatmap.IgnoreUserSettings.Value = true;
-                backgroundModeBeatmap.DimWhenUserSettingsIgnored.Value = 0.1f;
-            }
+            // [Ez] 选歌界面的暗度由 Ez 设置「选歌界面背景暗度」独占控制，毛玻璃 UI 开/关走同一条路径，
+            // 不再像以前那样在毛玻璃开启时借用游玩中的 DimLevel / BlurLevel。
+            backgroundModeBeatmap.IgnoreUserSettings.Value = true;
+            backgroundModeBeatmap.DimWhenUserSettingsIgnored.Value = songSelectBackgroundDim.Value;
 
             // Required to undo results screen dimming the background.
             // Probably needs more thought because this needs to be in every `ApplyToBackground` currently to restore sane defaults.
