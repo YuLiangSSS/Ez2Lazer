@@ -113,6 +113,15 @@ namespace osu.Game.EzOsuGame.Overlays
                 },
                 new SettingsItemV2(new FormCheckBox
                 {
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.EzHudCameraEnabled),
+                    Caption = EZ_HUD_CAMERA_ENABLED,
+                    HintText = EZ_HUD_CAMERA_ENABLED_TOOLTIP,
+                })
+                {
+                    Keywords = new[] { "camera", "webcam", "hud", "fps", "摄像头", "帧率" }
+                },
+                new SettingsItemV2(new FormCheckBox
+                {
                     Current = ezConfig.GetBindable<bool>(Ez2Setting.EzScoreRaceServiceEnabled),
                     Caption = EZ_SCORE_RACE_SERVICE_ENABLED,
                     HintText = EZ_SCORE_RACE_SERVICE_ENABLED_TOOLTIP,
@@ -278,61 +287,29 @@ namespace osu.Game.EzOsuGame.Overlays
                         return;
                     }
 
-                    notifications?.Post(new SimpleNotification { Text = EzSettingsProfile.LOCAL_PROFILE_ONLINE_PULL_BUSY });
-
-                    onlinePullService.PullAsync(request).ContinueWith(t => Schedule(() =>
+                    if (notifications == null)
                     {
-                        if (t.IsFaulted)
-                        {
-                            notifications?.Post(new SimpleErrorNotification { Text = EzSettingsProfile.LOCAL_PROFILE_ONLINE_PULL_FAILED });
-                            return;
-                        }
+                        onlinePullService.PullAsync(request);
+                        return;
+                    }
 
-                        if (t.IsCanceled)
-                            return;
+                    var notification = EzLocalProfileOnlinePullNotification.Create();
+                    notifications.Post(notification);
 
-                        var result = t.GetResultSafely();
+                    var progress = new EzLocalProfileOnlinePullNotification.Forwarder(notification);
 
-                        if (result.ErrorMessage == "need_online")
-                        {
-                            notifications?.Post(new SimpleErrorNotification { Text = EzSettingsProfile.LOCAL_PROFILE_ONLINE_PULL_NEED_ONLINE });
-                            return;
-                        }
+                    onlinePullService.PullAsync(request, progress, notification.CancellationToken)
+                                    .ContinueWith(t =>
+                                    {
+                                        var result = EzLocalProfileOnlinePullNotification.Finish(t, notification, notifications);
 
-                        if (result.ErrorMessage == "already_pulling")
-                        {
-                            notifications?.Post(new SimpleNotification { Text = EzSettingsProfile.LOCAL_PROFILE_ONLINE_PULL_BUSY });
-                            return;
-                        }
-
-                        if (!string.IsNullOrEmpty(result.ErrorMessage) && result.ErrorMessage != "cancelled")
-                        {
-                            notifications?.Post(new SimpleErrorNotification { Text = EzSettingsProfile.LOCAL_PROFILE_ONLINE_PULL_FAILED });
-                            return;
-                        }
-
-                        if (result.ErrorMessage == "cancelled")
-                            return;
-
-                        notifications?.Post(new SimpleNotification
-                        {
-                            Text = string.Format(
-                                EzSettingsProfile.LOCAL_PROFILE_ONLINE_PULL_DONE.ToString(),
-                                result.Candidates,
-                                result.Imported,
-                                result.AlreadyOwned,
-                                result.NoReplay,
-                                result.MissingBeatmap,
-                                result.Failed,
-                                result.StatsRecorded,
-                                result.MapsDownloaded,
-                                result.MapsAlreadyLocal,
-                                result.CollectionAdds),
-                        });
-
-                        if (result.StatsRecorded > 0 && localProfileService is not null && !localProfileService.IsComputing.Value)
-                            runCompute(localProfileService, localProfileService.GetPreviouslyIncludedUsernames(), clearRebuild: false, notifications);
-                    }));
+                                        if (result is { StatsRecorded: > 0 }
+                                            && localProfileService is not null
+                                            && !localProfileService.IsComputing.Value)
+                                        {
+                                            runCompute(localProfileService, localProfileService.GetPreviouslyIncludedUsernames(), clearRebuild: false, notifications);
+                                        }
+                                    });
                 }));
         }
 
@@ -385,6 +362,15 @@ namespace osu.Game.EzOsuGame.Overlays
             + "\nIn→Play: software; Play→Acou / In→Acou: mixer PCM crosses threshold as it enters the active output driver (not a mic)."
             + "\nFor key→judgment latency, enable Ez Judgment Diagnostics CSV. "
             + "Threshold: AcousticRmsThreshold (hot-reloadable).");
+
+        internal static readonly LocalisableString EZ_HUD_CAMERA_ENABLED = new EzLocalizationManager.EzLocalisableString(
+            "启用摄像头 HUD", "Enable Camera HUD");
+
+        internal static readonly LocalisableString EZ_HUD_CAMERA_ENABLED_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "默认关闭。关闭时不加载摄像头后端，不枚举设备，不打开摄像头，也不上传画面，对帧率没有影响。"
+            + "\n皮肤里的摄像头组件只有打开此开关后才会工作。",
+            "Off by default. While off, the camera backend is not loaded, devices are not enumerated, and no frames are captured or uploaded, so gameplay frame rate is unaffected."
+            + "\nCamera components in a skin do nothing until this is enabled.");
 
         internal static readonly LocalisableString EZ_SCORE_RACE_SERVICE_ENABLED = new EzLocalizationManager.EzLocalisableString(
             "启用角逐/时间线全局服务", "Enable Score Race / Timeline Global Service");

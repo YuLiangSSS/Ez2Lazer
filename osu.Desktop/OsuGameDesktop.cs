@@ -35,6 +35,8 @@ namespace osu.Desktop
         [Cached(typeof(IHighPerformanceSessionManager))]
         private readonly HighPerformanceSessionManager highPerformanceSessionManager = new HighPerformanceSessionManager();
 
+        protected override bool EnableWindowsCameraBackend => true;
+
         public bool IsFirstRun { get; init; }
 
         public bool EnableWebSocketServer { get; init; }
@@ -140,6 +142,14 @@ namespace osu.Desktop
 
         protected override void LoadComplete()
         {
+            // this is done before `base.LoadComplete` so that the game can immediately register data sources.
+            if (EnableWebSocketServer)
+            {
+                var provider = new OsuWebSocketProvider();
+                Add(provider);
+                Dependencies.CacheAs<IWebSocketProvider>(provider);
+            }
+
             base.LoadComplete();
 
             LoadComponentAsync(new DiscordRichPresence(), Add);
@@ -163,9 +173,6 @@ namespace osu.Desktop
 
             osuSchemeLinkIPCChannel = new OsuSchemeLinkIPCChannel(Host, this);
             archiveImportIPCChannel = new ArchiveImportIPCChannel(Host, this);
-
-            if (EnableWebSocketServer)
-                Add(new OsuWebSocketProvider());
         }
 
         public override void SetHost(GameHost host)
