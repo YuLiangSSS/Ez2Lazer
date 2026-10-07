@@ -23,6 +23,7 @@ using osu.Game.Audio;
 using osu.Game.Audio.Effects;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
@@ -40,6 +41,7 @@ using osu.Game.Screens.Menu;
 using osu.Game.Screens.Play.HUD;
 using osu.Game.Screens.Play.Leaderboards;
 using osu.Game.Screens.Play.PlayerSettings;
+using osu.Game.Screens.Select;
 using osu.Game.Skinning;
 using osu.Game.Users;
 using osu.Game.Utils;
@@ -100,6 +102,28 @@ namespace osu.Game.Screens.Play
 
         private Bindable<bool> showStoryboards = null!;
 
+        /// <summary>
+        /// Ez 设置：本界面是否沿用「选歌界面背景暗度」（<see cref="Ez2Setting.SongSelectBackgroundDim"/>）。
+        /// </summary>
+        private Bindable<bool> applySongSelectBackgroundDim = null!;
+
+        /// <summary>
+        /// Ez 设置「选歌界面背景暗度」的值，仅在 <see cref="applySongSelectBackgroundDim"/> 开启时使用。
+        /// </summary>
+        private Bindable<float> songSelectBackgroundDim = null!;
+
+        /// <summary>
+        /// 进入本界面（含重试返回）后是否把背景状态直接跳到目标值。由
+        /// <see cref="applySongSelectBackgroundDim"/> 控制，只对到达后的第一次应用生效，
+        /// 之后的悬停预览仍保留官方过渡。
+        /// </summary>
+        private bool applyBackgroundChangesInstantly;
+
+        /// <summary>
+        /// <see cref="BackgroundBrightnessReduction"/> 本次赋值是否跳过 200ms 过渡（供到达时使用）。
+        /// </summary>
+        private bool instantBrightnessChange;
+
         private bool backgroundBrightnessReduction;
 
         private readonly BindableDouble volumeAdjustment = new BindableDouble(1);
@@ -130,7 +154,8 @@ namespace osu.Game.Screens.Play
 
                 backgroundBrightnessReduction = value;
 
-                ApplyToBackground(b => b.FadeColour(OsuColour.Gray(backgroundBrightnessReduction ? 0.8f : 1), 200));
+                // [Ez] 到达本界面时可选跳过过渡，直接呈现目标亮度。
+                ApplyToBackground(b => b.FadeColour(OsuColour.Gray(backgroundBrightnessReduction ? 0.8f : 1), instantBrightnessChange ? 0 : 200));
             }
         }
 
@@ -203,11 +228,15 @@ namespace osu.Game.Screens.Play
         }
 
         [BackgroundDependencyLoader]
-        private void load(SessionStatics sessionStatics, OsuConfigManager config, IAPIProvider api)
+        private void load(SessionStatics sessionStatics, OsuConfigManager config, IAPIProvider api, Ez2ConfigManager ezConfig)
         {
             muteWarningShownOnce = sessionStatics.GetBindable<bool>(Static.MutedAudioNotificationShownOnce);
             batteryWarningShownOnce = sessionStatics.GetBindable<bool>(Static.LowBatteryNotificationShownOnce);
             showStoryboards = config.GetBindable<bool>(OsuSetting.ShowStoryboard);
+
+            // [Ez] 游玩前界面可选沿用选歌界面的背景暗度，避免此处维持官方偏亮的观感。
+            applySongSelectBackgroundDim = ezConfig.GetBindable<bool>(Ez2Setting.SongSelectDimAppliesToPlayerLoader);
+            songSelectBackgroundDim = ezConfig.GetBindable<float>(Ez2Setting.SongSelectBackgroundDim);
 
             const float padding = 25;
 
@@ -421,6 +450,11 @@ namespace osu.Game.Screens.Play
 
             BackgroundBrightnessReduction = false;
 
+            // [Ez] 交棒给 Player 时把「忽略用户设置时的暗度」还原为官方固定值，避免选歌界面的自定义暗度
+            // 被之后依赖该值的界面继承（例如 Cinema 模组让背景无暗度显示时）。
+            // Player 自身会在 OnEntering 里切回游玩设置的暗度 / 虚化，不受影响。
+            ApplyToBackground(b => b.DimWhenUserSettingsIgnored.Value = SongSelect.OFFICIAL_BACKGROUND_DIM);
+
             // we're moving to player, so a period of silence is upcoming.
             // stop the track before removing adjustment to avoid a volume spike.
             Beatmap.Value.Track.Stop();
@@ -518,6 +552,9 @@ namespace osu.Game.Screens.Play
 
             // We need to perform this check here rather than in OnHover as any number of children of VisualSettings
             // may also be handling the hover events.
+            bool instantly = applyBackgroundChangesInstantly;
+            applyBackgroundChangesInstantly = false;
+
             if (inputManager.HoveredDrawables.Contains(VisualSettings) || QuickRestart)
             {
                 // Preview user-defined background dim and blur when hovered on the visual settings panel.
@@ -525,8 +562,12 @@ namespace osu.Game.Screens.Play
                 {
                     b.IgnoreUserSettings.Value = false;
                     b.BlurAmount.Value = 0;
+
+                    if (instantly)
+                        b.ApplyDimInstantly();
                 });
 
+                instantBrightnessChange = instantly;
                 BackgroundBrightnessReduction = false;
             }
             else
@@ -535,11 +576,22 @@ namespace osu.Game.Screens.Play
                 {
                     // Returns background dim and blur to the values specified by PlayerLoader.
                     b.IgnoreUserSettings.Value = true;
+                    // [Ez] 开启「游玩前界面沿用该暗度」时使用选歌界面的暗度，否则回到官方固定值。
+                    b.DimWhenUserSettingsIgnored.Value = applySongSelectBackgroundDim.Value
+                        ? songSelectBackgroundDim.Value
+                        : SongSelect.OFFICIAL_BACKGROUND_DIM;
                     b.BlurAmount.Value = BACKGROUND_BLUR;
+
+                    // [Ez] 到达本界面时可选跳过渐变，直接呈现目标暗度。
+                    if (instantly)
+                        b.ApplyDimInstantly();
                 });
 
+                instantBrightnessChange = instantly;
                 BackgroundBrightnessReduction = true;
             }
+
+            instantBrightnessChange = false;
         }
 
         private Player consumePlayer()
@@ -587,6 +639,10 @@ namespace osu.Game.Screens.Play
         private void contentIn(double delayBeforeSideDisplays = 0)
         {
             MetadataInfo.Loading = true;
+
+            // [Ez] 开启「游玩前界面沿用该暗度」时，到达本界面的背景变化（暗度 / 亮度 / 颜色）直接跳到目标值，
+            // 不再播放官方渐变（从选歌界面过来时那段「先变亮再变暗」）。
+            applyBackgroundChangesInstantly = applySongSelectBackgroundDim.Value;
 
             if (QuickRestart)
             {
@@ -643,7 +699,7 @@ namespace osu.Game.Screens.Play
             lowPassFilter.CutoffTo(1000, 650, Easing.OutQuint);
             highPassFilter.CutoffTo(300).Then().CutoffTo(0, 1250); // 1250 is to line up with the appearance of MetadataInfo (750 delay + 500 fade-in)
 
-            ApplyToBackground(b => b.FadeColour(Color4.White, 800, Easing.OutQuint));
+            ApplyToBackground(b => b.FadeColour(Color4.White, applyBackgroundChangesInstantly ? 0 : 800, Easing.OutQuint));
         }
 
         protected virtual void ContentOut()

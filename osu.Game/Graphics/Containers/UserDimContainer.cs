@@ -98,12 +98,20 @@ namespace osu.Game.Graphics.Containers
         /// <summary>
         /// Should be invoked when any dependent dim level or user setting is changed and bring the visual state up-to-date.
         /// </summary>
-        protected virtual void UpdateVisuals()
+        protected virtual void UpdateVisuals() => applyVisuals(BACKGROUND_FADE_DURATION);
+
+        /// <summary>
+        /// [Ez] 立刻把当前暗度 / 可见性应用到内容，不做淡入淡出过渡。
+        /// 供「跳过游玩前界面背景渐变」使用：进入该界面时直接呈现目标暗度。
+        /// </summary>
+        public void ApplyVisualsInstantly() => applyVisuals(0);
+
+        private void applyVisuals(double duration)
         {
             ContentDisplayed = ShowDimContent;
 
-            dimContent.FadeTo(ContentDisplayed ? 1 : 0, BACKGROUND_FADE_DURATION, Easing.OutQuint);
-            dimContent.FadeColour(OsuColour.Gray(1f - DimLevel), BACKGROUND_FADE_DURATION, Easing.OutQuint);
+            dimContent.FadeTo(ContentDisplayed ? 1 : 0, duration, Easing.OutQuint);
+            dimContent.FadeColour(OsuColour.Gray(1f - DimLevel), duration, Easing.OutQuint);
         }
     }
 }

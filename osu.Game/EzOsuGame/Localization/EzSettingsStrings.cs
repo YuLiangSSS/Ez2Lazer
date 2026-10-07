@@ -198,6 +198,20 @@ namespace osu.Game.EzOsuGame.Localization
             + "\nThis is layered on top of the existing official shading, so 0% still keeps the card's own gradient."
             + "\nWith acrylic UI enabled the cards no longer draw cover artwork (they use a glass surface instead), so this has no effect.");
 
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_DIM_APPLIES_TO_PLAYER_LOADER =
+            new EzLocalizationManager.EzLocalisableString("游玩前界面沿用该暗度", "Apply this dim to the pre-game screen");
+
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_DIM_APPLIES_TO_PLAYER_LOADER_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "开启后，上一条「选歌界面背景暗度」会一并作用到进游戏前的那张谱面信息 / 设置界面（加载界面）："
+            + "鼠标没有停在该界面右侧设置项上时，背景同样按该暗度压暗，不再维持官方偏亮的观感。"
+            + "\n进入该界面时直接就按该暗度呈现，不再播放官方约 0.8 秒的渐变动画（从选歌界面进来时「先变亮再变暗」的那段就是它）。"
+            + "\n关闭则维持官方行为（该界面固定使用 10% 暗度，并保留官方过渡动画）。"
+            + "\n把鼠标移到该界面的设置项上时，仍会按游玩设置里的「背景暗度 / 背景虚化」预览，本开关不影响该预览。",
+            "When enabled, the \"Song select background dim\" above is also applied to the pre-game chart info / settings (loading) screen: whenever the mouse is not over its settings panel, the background stays darkened at that level instead of the official brighter look."
+            + "\nThat screen also shows the dim immediately on entry, skipping the official ~0.8s transition (the brief \"brighten then darken\" you see when coming from song select)."
+            + "\nWhen disabled, the official behaviour is kept (that screen always uses a 10% dim, with the official transition)."
+            + "\nHovering that screen's settings panel still previews the gameplay \"Background dim / blur\" settings; this toggle does not affect that preview.");
+
         public static readonly EzLocalizationManager.EzLocalisableString UI_FONT_MODIFY =
             new EzLocalizationManager.EzLocalisableString("修改字体", "Modify fonts");
 

@@ -183,6 +183,11 @@ namespace osu.Game.Screens.Select
         /// </summary>
         private Bindable<float> songSelectBackgroundDim = null!;
 
+        /// <summary>
+        /// Ez 设置「游玩前界面沿用该暗度」：开启时进入游玩前界面会把当前暗度交接过去，切换过程中背景不会被提亮。
+        /// </summary>
+        private Bindable<bool> songSelectDimAppliesToPlayerLoader = null!;
+
         private Bindable<KeySoundPreviewMode> keySoundPreview = null!;
         private EzPreviewTrackManager ezPreviewManager = null!;
 
@@ -376,6 +381,8 @@ namespace osu.Game.Screens.Select
 
                 updateBackgroundDim();
             });
+
+            songSelectDimAppliesToPlayerLoader = ezConfig.GetBindable<bool>(Ez2Setting.SongSelectDimAppliesToPlayerLoader);
 
             keySoundPreview = ezConfig.GetBindable<KeySoundPreviewMode>(Ez2Setting.KeySoundPreviewMode);
             showConvertedBeatmaps = config.GetBindable<bool>(OsuSetting.ShowConvertedBeatmaps);
@@ -821,7 +828,7 @@ namespace osu.Game.Screens.Select
             carousel.VisuallyFocusSelected = true;
 
             this.FadeOut(fade_duration, Easing.OutQuint);
-            onLeavingScreen();
+            onLeavingScreen(e.Next);
 
             base.OnSuspending(e);
         }
@@ -829,7 +836,7 @@ namespace osu.Game.Screens.Select
         public override bool OnExiting(ScreenExitEvent e)
         {
             this.FadeOut(fade_duration, Easing.OutQuint);
-            onLeavingScreen();
+            onLeavingScreen(e.Next);
 
             return base.OnExiting(e);
         }
@@ -947,7 +954,8 @@ namespace osu.Game.Screens.Select
             }, token);
         }
 
-        private void onLeavingScreen()
+        /// <param name="nextScreen">即将接管的界面，用于判断是否把当前背景暗度交接过去。</param>
+        private void onLeavingScreen(IScreen? nextScreen)
         {
             EzDisplayTagAltHighlight.Reset();
             modRestoreController.Reset();
@@ -979,8 +987,12 @@ namespace osu.Game.Screens.Select
             endLooping();
 
             // [Ez] 自定义的选歌界面暗度只应在选歌界面生效：离开时还原成官方固定值，
-            // 否则接下来的 PlayerLoader / 结算等界面会继承它。放在最后，确保晚于 restoreBackground() 的暗度重算。
-            ApplyToBackground(b => b.DimWhenUserSettingsIgnored.Value = detached_background_dim);
+            // 否则接下来的结算 / 主菜单等界面会继承它。放在最后，确保晚于 restoreBackground() 的暗度重算。
+            // 例外：切到游玩前界面（原版 4 个 ruleset 都走它）且已开启「游玩前界面沿用该暗度」时保留当前值，
+            // 让它用同一个暗度接管——这样「选歌元素淡出、只剩背景」的那段过渡不会突然被提亮。
+            bool handOverDim = nextScreen is PlayerLoader && songSelectDimAppliesToPlayerLoader.Value;
+
+            ApplyToBackground(b => b.DimWhenUserSettingsIgnored.Value = handOverDim ? songSelectBackgroundDim.Value : OFFICIAL_BACKGROUND_DIM);
         }
 
         protected override void LogoArriving(OsuLogo logo, bool resuming)
@@ -1058,9 +1070,9 @@ namespace osu.Game.Screens.Select
 
         /// <summary>
         /// 官方选歌界面写死的背景暗度。离开选歌界面时把背景的 DimWhenUserSettingsIgnored 还原成该值，
-        /// 因为该 bindable 会被 PlayerLoader 等界面继承（它们只改 IgnoreUserSettings，不改暗度）。
+        /// 因为该 bindable 会被其它界面继承；<see cref="Play.PlayerLoader"/> 在不沿用选歌界面暗度时也回退到该值。
         /// </summary>
-        private const float detached_background_dim = 0.1f;
+        public const float OFFICIAL_BACKGROUND_DIM = 0.1f;
 
         private void updateBackgroundDim() => ApplyToBackground(backgroundModeBeatmap =>
         {

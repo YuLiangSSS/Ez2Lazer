@@ -69,6 +69,16 @@ namespace osu.Game.Overlays.Settings.Sections.UserInterface
                 {
                     Keywords = new[] { "dim", "background", "brightness", "song select", "选歌", "背景", "暗度", "亮度", "变暗" }
                 },
+                // [Ez] 是否把上面的暗度一并应用到游玩前的加载界面（PlayerLoader，进入时直接呈现该暗度）。
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = EzSettingsStrings.SONG_SELECT_DIM_APPLIES_TO_PLAYER_LOADER,
+                    HintText = EzSettingsStrings.SONG_SELECT_DIM_APPLIES_TO_PLAYER_LOADER_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.SongSelectDimAppliesToPlayerLoader),
+                })
+                {
+                    Keywords = new[] { "dim", "player loader", "loading", "pre-game", "background", "fade", "transition", "游玩前", "加载", "载入", "暗度", "背景", "渐变", "过渡", "跳过" }
+                },
                 // [Ez] 传送带卡片封面暗度。
                 new SettingsItemV2(new FormSliderBar<float>
                 {

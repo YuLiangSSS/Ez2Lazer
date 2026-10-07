@@ -56,6 +56,12 @@ namespace osu.Game.Screens.Backgrounds
 
         private readonly DimmableBackground dimmable;
 
+        /// <summary>
+        /// [Ez] 立刻把当前暗度 / 可见性应用到背景，跳过过渡动画。
+        /// 供「跳过游玩前界面背景渐变」使用。
+        /// </summary>
+        public void ApplyDimInstantly() => dimmable.ApplyVisualsInstantly();
+
         public Drawable CaptureSource => dimmable;
 
         protected virtual DimmableBackground CreateFadeContainer() => new DimmableBackground { RelativeSizeAxes = Axes.Both };

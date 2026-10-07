@@ -135,6 +135,9 @@ namespace osu.Game.EzOsuGame.Configuration
             // 选歌界面背景暗度：默认沿用官方固定值 0.1，不改变开箱观感。
             SetDefault(Ez2Setting.SongSelectBackgroundDim, 0.1f, 0f, 1f, 0.01f);
 
+            // 游玩前界面（PlayerLoader）是否沿用上面的暗度。默认开启：此时该暗度取默认值 0.1，与官方行为一致。
+            SetDefault(Ez2Setting.SongSelectDimAppliesToPlayerLoader, true);
+
             // 选歌界面传送带卡片封面暗度：默认 0，保持官方观感。
             SetDefault(Ez2Setting.SongSelectCoverDim, 0f, 0f, 1f, 0.01f);
             SetDefault(Ez2Setting.UiFontDefault, string.Empty);
@@ -1056,6 +1059,13 @@ namespace osu.Game.EzOsuGame.Configuration
         /// 叠加在官方既有的明暗层之上；毛玻璃 UI 开启时卡片不绘制封面，本项不生效。
         /// </summary>
         SongSelectCoverDim,
+
+        /// <summary>
+        /// 是否把「选歌界面背景暗度」一并应用到游玩前的加载界面（PlayerLoader）：
+        /// 开启时该界面在未悬停设置项时也按同一暗度压暗，且进入时直接就按该暗度呈现（不播放官方渐变）；
+        /// 关闭则回退到官方固定值 <see cref="osu.Game.Screens.Select.SongSelect.OFFICIAL_BACKGROUND_DIM"/> 与官方过渡。
+        /// </summary>
+        SongSelectDimAppliesToPlayerLoader,
 
         /// <summary>English / Latin system font for default UI (empty = built-in Torus BMFont).</summary>
         UiFontDefault,
