@@ -131,7 +131,7 @@ namespace osu.Game.Screens.Select
                     AutoSizeAxes = Axes.Y,
                     Direction = FillDirection.Vertical,
                     Spacing = new Vector2(0f, 5f),
-                    Padding = new MarginPadding { Top = corner_radius + 5, Bottom = 2, Right = 40f, Left = 2f },
+                    Padding = new MarginPadding { Top = corner_radius - 0.5f, Bottom = 2, Right = 40f, Left = 2f },
                     Children = new Drawable[]
                     {
                         new ReverseChildIDFillFlowContainer<Drawable>
@@ -139,7 +139,7 @@ namespace osu.Game.Screens.Select
                             RelativeSizeAxes = Axes.X,
                             AutoSizeAxes = Axes.Y,
                             Direction = FillDirection.Vertical,
-                            Spacing = new Vector2(0f, 5f),
+                            Spacing = new Vector2(0f, 0.5f),
                             Children = new Drawable[]
                             {
                                 new Container
@@ -439,39 +439,8 @@ namespace osu.Game.Screens.Select
             return criteria;
         }
 
-        private void applyCircleSizeFilter(FilterCriteria criteria)
-        {
-            var selectedModeIds = csSelector.SelectedModeIds;
-
-            if (selectedModeIds.Count == 0)
-                return;
-
-            var selectedModes = CsItemIds.LIST
-                                         .Where(m => selectedModeIds.Contains(m.Id) && m.CsValue.HasValue)
-                                         .Select(m => m.CsValue!.Value)
-                                         .ToList();
-
-            if (selectedModes.Count == 0)
-                return;
-
-            // 通过 TryParseCustomKeywordCriteria 隐式设置过滤条件（不在搜索框显示）
-            if (criteria.RulesetCriteria != null && ruleset.Value.OnlineID == 3)
-            {
-                string keyValues = string.Join(",", selectedModes.Select(m => m.ToString("0")));
-                criteria.RulesetCriteria.TryParseCustomKeywordCriteria("keys", Operator.Equal, keyValues);
-            }
-            else if (ruleset.Value.OnlineID != 3)
-            {
-                // For no mania rulesets, ±0.5 is an intuitive range.
-                criteria.CircleSize = new FilterCriteria.OptionalRange<float>
-                {
-                    Min = selectedModes.Min() - 0.5f,
-                    Max = selectedModes.Max() + 0.5f,
-                    IsLowerInclusive = false,
-                    IsUpperInclusive = false
-                };
-            }
-        }
+        private void applyCircleSizeFilter(FilterCriteria criteria) =>
+            csSelector.ApplyToFilterCriteria(criteria);
 
         private void updateCriteria(bool clearScopedSet = true)
         {

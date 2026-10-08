@@ -25,6 +25,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.Extensions;
+using osu.Game.EzOsuGame.Analysis;
 using osu.Game.Graphics.Containers;
 using osu.Game.IO.Archives;
 using osu.Game.EzOsuGame.Audio;
@@ -33,6 +34,7 @@ using osu.Game.EzOsuGame.Mods;
 using osu.Game.EzOsuGame.LocalProfile;
 using osu.Game.EzOsuGame.Performance;
 using osu.Game.EzOsuGame.Scoring;
+using osu.Game.EzOsuGame.Scoring.Bonus;
 using osu.Game.EzOsuGame.Screens.Play;
 using osu.Game.EzOsuGame.Screens.Rotation;
 using osu.Game.Online.API;
@@ -183,6 +185,9 @@ namespace osu.Game.Screens.Play
         // without the loading screen (one such usage is the skin editor's scene library).
         [Cached]
         private OverlayColourProvider colourProvider = new OverlayColourProvider(OverlayColourScheme.Purple);
+
+        [Resolved(canBeNull: true)]
+        private EzAnalysisCache ezAnalysisCache { get; set; }
 
         [Resolved]
         private ScoreManager scoreManager { get; set; }
@@ -1575,11 +1580,11 @@ namespace osu.Game.Screens.Play
         /// </summary>
         /// <param name="score">The <see cref="Scoring.Score"/> to import.</param>
         /// <returns>The imported score.</returns>
-        protected virtual Task ImportScore(Score score)
+        protected virtual async Task ImportScore(Score score)
         {
             // Replays are already populated and present in the game's database, so should not be re-imported.
             if (DrawableRuleset.ReplayScore != null)
-                return Task.CompletedTask;
+                return;
 
             ByteArrayArchiveReader replayReader = null;
 
@@ -1593,37 +1598,56 @@ namespace osu.Game.Screens.Play
                 }
             }
 
-            // the import process will re-attach managed beatmap/rulesets to this score. we don't want this for now, so create a temporary copy to import.
-            var importableScore = score.ScoreInfo.DeepClone();
-
-            int maniaHitMode = importableScore.ManiaHitMode;
-            int maniaHealthMode = importableScore.ManiaHealthMode;
-
-            var imported = scoreManager.Import(importableScore, replayReader);
-            Debug.Assert(imported != null);
-
-            imported!.PerformRead(s =>
+            if (!EzScoreBonusTracker.IsEnabled)
             {
-                // because of the clone above, it's required that we copy back the post-import hash/ID to use for availability matching.
-                score.ScoreInfo.Hash = s.Hash;
-                score.ScoreInfo.ID = s.ID;
-                score.ScoreInfo.Files.AddRange(s.Files.Detach());
-                score.ScoreInfo.ManiaHitMode = s.ManiaHitMode;
-                score.ScoreInfo.ManiaHealthMode = s.ManiaHealthMode;
-            });
-
-            imported.PerformWrite(s =>
+                EzScoreBonusCalculator.Apply(score.ScoreInfo, GameplayState.Beatmap, cachedKps: null);
+            }
+            else
             {
-                s.ManiaHitMode = maniaHitMode;
-                s.ManiaHealthMode = maniaHealthMode;
-            });
+                IReadOnlyList<double> cachedKps = null;
 
-            // [Ez] The score is now in Realm, so fold it into the local profile analysis here — the same place the
-            // score lands. Fire-and-forget: the call only touches SQLite and returns, and it is idempotent, while
-            // the startup warmup re-derives the Realm-side skill rows from whatever the slice now holds.
-            ezLocalProfileService?.IngestSettledScore(score.ScoreInfo.ID);
+                if (ezAnalysisCache != null && score.ScoreInfo.BeatmapInfo is BeatmapInfo beatmapInfo)
+                {
+                    var analysis = await ezAnalysisCache.GetAnalysisAsync(beatmapInfo, score.ScoreInfo.Ruleset, score.ScoreInfo.Mods).ConfigureAwait(false);
 
-            return Task.CompletedTask;
+                    if (analysis is EzAnalysisResult result && result.KpsList.Count > 0)
+                        cachedKps = result.KpsList;
+                }
+
+                EzScoreBonusCalculator.Apply(score.ScoreInfo, GameplayState.Beatmap, cachedKps);
+
+                // the import process will re-attach managed beatmap/rulesets to this score. we don't want this for now, so create a temporary copy to import.
+                var importableScore = score.ScoreInfo.DeepClone();
+
+                int maniaHitMode = importableScore.ManiaHitMode;
+                int maniaHealthMode = importableScore.ManiaHealthMode;
+
+                var imported = scoreManager.Import(importableScore, replayReader);
+                Debug.Assert(imported != null);
+
+                imported!.PerformRead(s =>
+                {
+                    // because of the clone above, it's required that we copy back the post-import hash/ID to use for availability matching.
+                    score.ScoreInfo.Hash = s.Hash;
+                    score.ScoreInfo.ID = s.ID;
+                    score.ScoreInfo.Files.AddRange(s.Files.Detach());
+                    score.ScoreInfo.ManiaHitMode = s.ManiaHitMode;
+                    score.ScoreInfo.ManiaHealthMode = s.ManiaHealthMode;
+                });
+
+                imported.PerformWrite(s =>
+                {
+                    s.ManiaHitMode = maniaHitMode;
+                    s.ManiaHealthMode = maniaHealthMode;
+                });
+
+                EzScoreBonusProvider.Store(score.ScoreInfo, score.ScoreInfo.EzBonus);
+
+                // [Ez] The score is now in Realm, so fold it into the local profile analysis here — the same place the
+                // score lands. Fire-and-forget: the call only touches SQLite and returns, and it is idempotent, while
+                // the startup warmup re-derives the Realm-side skill rows from whatever the slice now holds.
+                ezLocalProfileService?.IngestSettledScore(score.ScoreInfo.ID);
+            }
         }
 
         /// <summary>

@@ -16,6 +16,7 @@ using osu.Game.Configuration;
 using osu.Game.EzOsuGame.HUD;
 using osu.Game.EzOsuGame.Online;
 using osu.Game.EzOsuGame.Scoring;
+using osu.Game.EzOsuGame.Scoring.Bonus;
 using osu.Game.Scoring;
 
 namespace osu.Game.EzOsuGame.Configuration
@@ -247,7 +248,7 @@ namespace osu.Game.EzOsuGame.Configuration
 
             #region 服务器与账号
 
-            SetDefault(Ez2Setting.ServerPreset, ServerPreset.Official);
+            SetDefault(Ez2Setting.ServerPreset, ServerPreset.g0v0);
             SetDefault(Ez2Setting.CustomApiUrl, string.Empty);
             SetDefault(Ez2Setting.CustomWebsiteUrl, string.Empty);
             SetDefault(Ez2Setting.CustomClientId, string.Empty);
@@ -295,6 +296,8 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.ManiaHealthMode, EzEnumHealthMode.Lazer);
             SetDefault(Ez2Setting.BmsPoorHitResultEnable, !DebugUtils.IsNUnitRunning);
             SetDefault(Ez2Setting.JudgePrecedence, EzEnumJudgePrecedence.Earliest);
+            SetDefault(Ez2Setting.ScoreBonusTendency, EzScoreBonusTendency.LowErrorRate);
+            SetDefault(Ez2Setting.ScoreBonusCrossMs, EzScoreBonusFormula.OFFSET_CROSS_MS, 11, 64, 1.0);
             SetDefault(Ez2Setting.ManiaBarLinesBool, true);
 
             SetDefault(Ez2Setting.ManiaPseudo3DRotation, 0.0, 0.0, 75.0, 1.0);
@@ -1186,6 +1189,10 @@ namespace osu.Game.EzOsuGame.Configuration
         ManiaHealthMode,
         BmsPoorHitResultEnable,
         JudgePrecedence,
+
+        // 判定附加分
+        ScoreBonusTendency,
+        ScoreBonusCrossMs,
 
         HitTargetFloatFixed,
         HitTargetAlpha,
