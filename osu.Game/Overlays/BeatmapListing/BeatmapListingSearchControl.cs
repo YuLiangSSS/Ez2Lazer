@@ -50,6 +50,8 @@ namespace osu.Game.Overlays.BeatmapListing
 
         public Bindable<SearchOwned> Local => localFilter.Current;
 
+        public Bindable<SearchBlacklist> Blacklist => blacklistFilter.Current;
+
         public Bindable<SearchExplicit> ExplicitContent => explicitContentFilter.Current;
 
         public APIBeatmapSet? BeatmapSet
@@ -77,6 +79,7 @@ namespace osu.Game.Overlays.BeatmapListing
         private readonly BeatmapSearchScoreFilterRow ranksFilter;
         private readonly BeatmapSearchFilterRow<SearchPlayed> playedFilter;
         private readonly BeatmapSearchFilterRow<SearchOwned> localFilter;
+        private readonly BeatmapSearchFilterRow<SearchBlacklist> blacklistFilter;
         private readonly BeatmapSearchFilterRow<SearchExplicit> explicitContentFilter;
 
         private readonly Box background;
@@ -142,6 +145,7 @@ namespace osu.Game.Overlays.BeatmapListing
                                     ranksFilter = new BeatmapSearchScoreFilterRow(),
                                     playedFilter = new BeatmapSearchFilterRow<SearchPlayed>(BeatmapsStrings.ListingSearchFiltersPlayed),
                                     localFilter = new BeatmapSearchFilterRow<SearchOwned>(EzBeatmapListingStrings.LOCAL_FILTER_HEADER),
+                                    blacklistFilter = new BeatmapSearchFilterRow<SearchBlacklist>(EzBeatmapListingStrings.BLACKLIST_FILTER_HEADER),
                                     explicitContentFilter = new BeatmapSearchFilterRow<SearchExplicit>(BeatmapsStrings.ListingSearchFiltersNsfw),
                                 }
                             }

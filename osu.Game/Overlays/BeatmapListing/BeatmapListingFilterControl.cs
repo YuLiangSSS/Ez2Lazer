@@ -19,6 +19,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Beatmaps.Drawables.Cards;
 using osu.Game.Configuration;
 using osu.Game.Database;
+using osu.Game.EzOsuGame.Beatmaps;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests;
 using osu.Game.Online.API.Requests.Responses;
@@ -79,6 +80,12 @@ namespace osu.Game.Overlays.BeatmapListing
         /// </summary>
         [Resolved(CanBeNull = true)]
         private RealmAccess realm { get; set; }
+
+        /// <summary>
+        /// 在线接口同样不支持按本地黑名单过滤，因此「黑名单」筛选（<see cref="SearchBlacklist"/>）也在客户端完成。
+        /// </summary>
+        [Resolved(CanBeNull = true)]
+        private EzBeatmapBlacklistStore beatmapBlacklist { get; set; }
 
         private IBindable<APIUser> apiUser;
 
@@ -185,6 +192,7 @@ namespace osu.Game.Overlays.BeatmapListing
             searchControl.Ranks.CollectionChanged += (_, _) => queueUpdateSearch();
             searchControl.Played.BindValueChanged(_ => queueUpdateSearch());
             searchControl.Local.BindValueChanged(_ => queueUpdateSearch());
+            searchControl.Blacklist.BindValueChanged(_ => queueUpdateSearch());
             searchControl.ExplicitContent.BindValueChanged(_ => queueUpdateSearch());
 
             sortControl.Current.BindValueChanged(_ => queueUpdateSearch());
@@ -283,7 +291,7 @@ namespace osu.Game.Overlays.BeatmapListing
                     }
                 }
 
-                sets = applyLocalFilter(sets);
+                sets = applyLocalFilters(sets);
 
                 var resultsReturned = SearchResult.ResultsReturned(sets);
                 SearchFinished?.Invoke(resultsReturned);
@@ -293,12 +301,37 @@ namespace osu.Game.Overlays.BeatmapListing
         }
 
         /// <summary>
-        /// Applies the client-side "local beatmaps" filter (see <see cref="SearchOwned"/>) to the currently selected value.
+        /// Applies the client-side filters (「本地谱面」 and 「黑名单」) to the currently selected values.
         /// </summary>
         /// <remarks>
-        /// Filtering is applied to each page as it arrives, so pages where every beatmap set is already available locally
+        /// Filtering is applied to each page as it arrives, so pages where every beatmap set is filtered out
         /// will simply display fewer (or no) cards. Scrolling on to the next page continues to work as usual.
         /// </remarks>
+        private List<APIBeatmapSet> applyLocalFilters(List<APIBeatmapSet> sets)
+        {
+            sets = applyBlacklistFilter(sets);
+
+            return applyLocalFilter(sets);
+        }
+
+        /// <summary>
+        /// Applies the client-side blacklist filter (see <see cref="SearchBlacklist"/>) to the currently selected value.
+        /// </summary>
+        /// <remarks>
+        /// 黑名单条目常驻内存，这里每页只是对约 50 张谱面做一次哈希查找，与黑名单条目数量基本无关。
+        /// 黑名单内容本身请用设置里的「查看黑名单谱面」查看。
+        /// </remarks>
+        private List<APIBeatmapSet> applyBlacklistFilter(List<APIBeatmapSet> sets)
+        {
+            if (searchControl.Blacklist.Value != SearchBlacklist.NotBlacklisted || beatmapBlacklist == null || sets.Count == 0)
+                return sets;
+
+            return sets.Where(s => !beatmapBlacklist.Contains(s.OnlineID)).ToList();
+        }
+
+        /// <summary>
+        /// Applies the client-side "local beatmaps" filter (see <see cref="SearchOwned"/>) to the currently selected value.
+        /// </summary>
         private List<APIBeatmapSet> applyLocalFilter(List<APIBeatmapSet> sets)
         {
             SearchOwned localFilter = searchControl.Local.Value;

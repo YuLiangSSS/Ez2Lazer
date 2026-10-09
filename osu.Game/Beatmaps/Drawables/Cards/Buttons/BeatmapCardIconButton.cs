@@ -111,6 +111,16 @@ namespace osu.Game.Beatmaps.Drawables.Cards.Buttons
             hover.FadeTo(isHovered ? 1f : 0f, 500, Easing.OutQuint);
             content.ScaleTo(isHovered ? 0.9f : 0.8f, 500, Easing.OutQuint);
             Icon.FadeColour(isHovered ? HoverColour : IdleColour, BeatmapCard.TRANSITION_DURATION, Easing.OutQuint);
+
+            UpdateIconState(isHovered);
+        }
+
+        /// <summary>
+        /// 在通用状态（悬停 / 可用性 / 颜色）更新之后，为具体按钮补充自己的图标状态。
+        /// </summary>
+        /// <param name="isHovered">当前是否处于可交互的悬停状态。</param>
+        protected virtual void UpdateIconState(bool isHovered)
+        {
         }
 
         protected void SetLoading(bool isLoading)

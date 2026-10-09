@@ -44,6 +44,7 @@ using osu.Game.Extensions;
 using osu.Game.EzOsuGame;
 using osu.Game.EzOsuGame.Analysis;
 using osu.Game.EzOsuGame.Background.Pixiv;
+using osu.Game.EzOsuGame.Beatmaps;
 using osu.Game.EzOsuGame.Camera;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.ExternalRulesets;
@@ -378,6 +379,9 @@ namespace osu.Game
             Decoder.RegisterDependencies(RulesetStore);
 
             dependencies.CacheAs(Storage);
+
+            // 谱面浏览器黑名单：卡片上的黑名单按钮与「黑名单」筛选项共用同一份存储。
+            dependencies.Cache(new EzBeatmapBlacklistStore(Storage));
 
             var largeStore = new LargeTextureStore(Host.Renderer, Host.CreateTextureLoaderStore(new NamespacedResourceStore<byte[]>(Resources, @"Textures")));
             largeStore.AddTextureSource(Host.CreateTextureLoaderStore(CreateOnlineStore()));

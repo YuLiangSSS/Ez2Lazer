@@ -86,7 +86,7 @@ namespace osu.Game.Beatmaps.Drawables.Cards
                             Width = WIDTH - height + CORNER_RADIUS,
                             FavouriteState = { BindTarget = FavouriteState },
                             ButtonsCollapsedWidth = CORNER_RADIUS,
-                            ButtonsExpandedWidth = 24,
+                            ButtonsExpandedWidth = 20,
                             Children = new Drawable[]
                             {
                                 new FillFlowContainer

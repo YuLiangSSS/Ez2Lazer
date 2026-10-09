@@ -822,5 +822,20 @@ namespace osu.Game.EzOsuGame.Localization
             + "\nAlready-persisted ChartDan / CSI is not retroactively updated; rebuild (Data rebuild -> Realm chart skill chain) to apply.");
 
         #endregion
+
+        #region Ez 谱面浏览器
+
+        public static readonly EzLocalizationManager.EzLocalisableString EZ_BEATMAP_LISTING_SECTION_HEADER =
+            new EzLocalizationManager.EzLocalisableString("Ez 谱面浏览器", "Ez Beatmap Listing");
+
+        public static readonly LocalisableString BEATMAP_BLACKLIST_VIEW = new EzLocalizationManager.EzLocalisableString(
+            "查看黑名单谱面",
+            "View blacklisted beatmaps");
+
+        public static readonly LocalisableString BEATMAP_BLACKLIST_VIEW_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "打开谱面黑名单界面，查看并移出黑名单中的谱面（加入黑名单请用谱面卡片上的骷髅头按钮）。",
+            "Open the beatmap blacklist to view and remove blacklisted beatmaps (use the skull button on a beatmap card to blacklist one).");
+
+        #endregion
     }
 }

@@ -50,6 +50,11 @@ namespace osu.Game.Beatmaps.Drawables.Cards
 
         public IEnumerable<BeatmapCardIconButton> Buttons => buttons;
 
+        /// <summary>
+        /// 卡片右侧按钮列中，单个按钮占用的高度比例（收藏 / 黑名单 / 下载或前往谱面三个按钮平分）。
+        /// </summary>
+        private const float button_height = 1 / 3f;
+
         protected override Container<Drawable> Content => mainContent;
 
         private readonly Container background;
@@ -105,7 +110,14 @@ namespace osu.Game.Beatmaps.Drawables.Cards
                                 Anchor = Anchor.TopCentre,
                                 Origin = Anchor.TopCentre,
                                 RelativeSizeAxes = Axes.Both,
-                                Height = 0.5f,
+                                Height = button_height,
+                            },
+                            new BlacklistButton(beatmapSet)
+                            {
+                                Anchor = Anchor.Centre,
+                                Origin = Anchor.Centre,
+                                RelativeSizeAxes = Axes.Both,
+                                Height = button_height,
                             },
                             new DownloadButton(beatmapSet)
                             {
@@ -113,7 +125,7 @@ namespace osu.Game.Beatmaps.Drawables.Cards
                                 Origin = Anchor.BottomCentre,
                                 State = { BindTarget = downloadTracker.State },
                                 RelativeSizeAxes = Axes.Both,
-                                Height = 0.5f,
+                                Height = button_height,
                             },
                         }
                     }
@@ -150,7 +162,7 @@ namespace osu.Game.Beatmaps.Drawables.Cards
                 Origin = Anchor.BottomCentre,
                 State = { BindTarget = downloadTracker.State },
                 RelativeSizeAxes = Axes.Both,
-                Height = 0.5f,
+                Height = button_height,
             });
         }
 
