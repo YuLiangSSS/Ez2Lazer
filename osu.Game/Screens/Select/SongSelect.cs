@@ -32,6 +32,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Collections;
 using osu.Game.Configuration;
 using osu.Game.Database;
+using osu.Game.Graphics;
 using osu.Game.Graphics.Carousel;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.Cursor;
@@ -1004,7 +1005,15 @@ namespace osu.Game.Screens.Select
             // 让它用同一个暗度接管——这样「选歌元素淡出、只剩背景」的那段过渡不会突然被提亮。
             bool handOverDim = nextScreen is PlayerLoader && songSelectDimAppliesToPlayerLoader.Value;
 
-            ApplyToBackground(b => b.DimWhenUserSettingsIgnored.Value = handOverDim ? songSelectBackgroundDim.Value : OFFICIAL_BACKGROUND_DIM);
+            if (usingEzBackground)
+            {
+                // Ez 背景没有暗度 bindable，走亮度叠乘；交接时保留当前暗度，否则还原成不压暗。
+                applyEzBackgroundDim(handOverDim ? songSelectBackgroundDim.Value : 0f);
+            }
+            else
+            {
+                ApplyToBackground(b => b.DimWhenUserSettingsIgnored.Value = handOverDim ? songSelectBackgroundDim.Value : OFFICIAL_BACKGROUND_DIM);
+            }
         }
 
         protected override void LogoArriving(OsuLogo logo, bool resuming)
@@ -1086,14 +1095,29 @@ namespace osu.Game.Screens.Select
         /// </summary>
         public const float OFFICIAL_BACKGROUND_DIM = 0.1f;
 
+        /// <summary>
+        /// [Ez] 进入本界面时实际用的是 Ez 背景（<see cref="BackgroundScreenDefault"/>）还是谱面背景。
+        /// 暗度处理按这个字段分支而不是实时读设置：只有谱面背景才有暗度 bindable，
+        /// 在界面内改设置导致背景类型与设置不一致时也不会走错分支。
+        /// </summary>
+        private bool usingEzBackground;
+
         protected override BackgroundScreen CreateBackground()
-            => useEzBackground.Value ? new BackgroundScreenDefault() : new BackgroundScreenBeatmap(Beatmap.Value);
+        {
+            usingEzBackground = useEzBackground.Value;
+
+            return usingEzBackground ? new BackgroundScreenDefault() : new BackgroundScreenBeatmap(Beatmap.Value);
+        }
 
         private void updateBackgroundDim()
         {
-            // [Ez] 使用 Ez 背景（非谱面背景）时不参与谱面背景的暗度 / 虚化处理。
-            if (useEzBackground.Value)
+            // [Ez] 使用 Ez 背景（BackgroundScreenDefault）时没有 UserDimContainer，
+            // 改为直接给背景叠亮度来压暗，同样由「选歌界面背景暗度」控制。
+            if (usingEzBackground)
+            {
+                applyEzBackgroundDim(songSelectBackgroundDim.Value);
                 return;
+            }
 
             ApplyToBackground(backgroundModeBeatmap =>
             {
@@ -1112,6 +1136,15 @@ namespace osu.Game.Screens.Select
                 backgroundModeBeatmap.BlurAmount.Value = configBackgroundBlur.Value && !backgroundRevealActive ? 20 : 0f;
             });
         }
+
+        /// <summary>
+        /// [Ez] 给 Ez 背景（非谱面背景，没有暗度 bindable）直接叠亮度实现压暗，
+        /// 与官方主界面压暗同一背景类型的方式一致。
+        /// </summary>
+        /// <param name="dim">目标暗度（0 = 不压暗，1 = 全黑）。</param>
+        /// <param name="duration">过渡时长。</param>
+        private void applyEzBackgroundDim(float dim, double duration = 250)
+            => base.ApplyToBackground((BackgroundScreen b) => b.FadeColour(OsuColour.Gray(1f - dim), duration));
 
         #endregion
 
