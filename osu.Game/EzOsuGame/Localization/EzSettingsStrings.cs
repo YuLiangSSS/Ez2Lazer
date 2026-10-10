@@ -212,6 +212,19 @@ namespace osu.Game.EzOsuGame.Localization
             + "\nWhen disabled, the official behaviour is kept (that screen always uses a 10% dim, with the official transition)."
             + "\nHovering that screen's settings panel still previews the gameplay \"Background dim / blur\" settings; this toggle does not affect that preview.");
 
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_DIM_APPLIES_TO_RESULTS_SCREEN =
+            new EzLocalizationManager.EzLocalisableString("结算界面沿用该暗度", "Apply this dim to the results screen");
+
+        public static readonly EzLocalizationManager.EzLocalisableString SONG_SELECT_DIM_APPLIES_TO_RESULTS_SCREEN_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "开启后，结算界面的背景暗度改由上面的「选歌界面背景暗度」决定（想彻底隐藏结算背景就把暗度拉到 100%）。"
+            + "\n进入结算界面时直接就按该暗度呈现，不播放官方 250ms 的变暗过渡。"
+            + "\n官方原有的亮度叠乘仍在：结算界面平时按 50% 亮度叠乘，展开成绩详情时变 40%，所以实际观感会比该百分比更暗。"
+            + "\n关闭则维持官方行为（沿用游玩设置里的「背景暗度」）。",
+            "When enabled, the results screen background dim comes from the \"Song select background dim\" above (set it to 100% to hide the results background entirely)."
+            + "\nThat dim is applied immediately on entry, skipping the official 250ms darkening transition."
+            + "\nThe official brightness multiplier still applies (50% normally, 40% while a score panel is expanded), so the result looks darker than the percentage alone suggests."
+            + "\nWhen disabled, the official behaviour is kept (the gameplay \"Background dim\" is used).");
+
         public static readonly EzLocalizationManager.EzLocalisableString UI_FONT_MODIFY =
             new EzLocalizationManager.EzLocalisableString("修改字体", "Modify fonts");
 

@@ -79,6 +79,16 @@ namespace osu.Game.Overlays.Settings.Sections.UserInterface
                 {
                     Keywords = new[] { "dim", "player loader", "loading", "pre-game", "background", "fade", "transition", "游玩前", "加载", "载入", "暗度", "背景", "渐变", "过渡", "跳过" }
                 },
+                // [Ez] 是否把上面的暗度一并应用到结算界面（进入时直接呈现该暗度）。
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = EzSettingsStrings.SONG_SELECT_DIM_APPLIES_TO_RESULTS_SCREEN,
+                    HintText = EzSettingsStrings.SONG_SELECT_DIM_APPLIES_TO_RESULTS_SCREEN_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.SongSelectDimAppliesToResultsScreen),
+                })
+                {
+                    Keywords = new[] { "dim", "results", "ranking", "score", "background", "fade", "transition", "结算", "成绩", "排行", "暗度", "背景", "渐变", "过渡", "跳过" }
+                },
                 // [Ez] 传送带卡片封面暗度。
                 new SettingsItemV2(new FormSliderBar<float>
                 {

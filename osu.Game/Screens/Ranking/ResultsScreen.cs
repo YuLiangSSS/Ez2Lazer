@@ -25,6 +25,7 @@ using osu.Game.Graphics;
 using osu.Game.Graphics.Containers;
 using osu.Game.Graphics.UserInterface;
 using osu.Game.Input.Bindings;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Statistics;
 using osu.Game.EzOsuGame.Screens.Rotation;
 using osu.Game.Localisation;
@@ -93,6 +94,16 @@ namespace osu.Game.Screens.Ranking
 
         private Sample? popInSample;
 
+        /// <summary>
+        /// Ez 设置：结算界面是否沿用「选歌界面背景暗度」（<see cref="Ez2Setting.SongSelectBackgroundDim"/>）。
+        /// </summary>
+        private Bindable<bool> applySongSelectBackgroundDim = null!;
+
+        /// <summary>
+        /// Ez 设置「选歌界面背景暗度」的值，仅在 <see cref="applySongSelectBackgroundDim"/> 开启时使用。
+        /// </summary>
+        private Bindable<float> songSelectBackgroundDim = null!;
+
         [Cached]
         private OverlayColourProvider colourProvider = new OverlayColourProvider(OverlayColourScheme.Aquamarine);
 
@@ -104,11 +115,15 @@ namespace osu.Game.Screens.Ranking
         }
 
         [BackgroundDependencyLoader]
-        private void load(AudioManager audio)
+        private void load(AudioManager audio, Ez2ConfigManager ezConfig)
         {
             FillFlowContainer buttons;
 
             popInSample = audio.Samples.Get(@"UI/overlay-pop-in");
+
+            // [Ez] 结算界面可选沿用选歌界面的背景暗度，避免此处维持官方偏亮的观感。
+            applySongSelectBackgroundDim = ezConfig.GetBindable<bool>(Ez2Setting.SongSelectDimAppliesToResultsScreen);
+            songSelectBackgroundDim = ezConfig.GetBindable<float>(Ez2Setting.SongSelectBackgroundDim);
 
             InternalChild = new PopoverContainer
             {
@@ -478,7 +493,21 @@ namespace osu.Game.Screens.Ranking
             ApplyToBackground(b =>
             {
                 b.BlurAmount.Value = BACKGROUND_BLUR;
-                b.FadeColour(OsuColour.Gray(0.5f), 250);
+
+                // [Ez] 开启「结算界面沿用该暗度」时改由 Ez 设置决定背景暗度，并直接呈现目标值，
+                // 不播放官方 250ms 的变暗过渡（以及暗度本身 800ms 的过渡）。
+                bool followSongSelectDim = applySongSelectBackgroundDim.Value;
+
+                if (followSongSelectDim)
+                {
+                    b.IgnoreUserSettings.Value = true;
+                    b.DimWhenUserSettingsIgnored.Value = songSelectBackgroundDim.Value;
+                }
+
+                b.FadeColour(OsuColour.Gray(0.5f), followSongSelectDim ? 0 : 250);
+
+                if (followSongSelectDim)
+                    b.ApplyDimInstantly();
             });
 
             bottomPanel.FadeTo(1, 250);
