@@ -52,6 +52,7 @@ using osu.Game.Overlays.Volume;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
+using osu.Game.Screens.Backgrounds;
 using osu.Game.Screens.Footer;
 using osu.Game.Screens.Menu;
 using osu.Game.Screens.Play;
@@ -176,6 +177,7 @@ namespace osu.Game.Screens.Select
 
         private Bindable<bool> configBackgroundBlur = null!;
         private Bindable<bool> acrylicUiEnabled = null!;
+        private Bindable<bool> useEzBackground = null!;
         private Bindable<bool> showConvertedBeatmaps = null!;
 
         /// <summary>
@@ -361,6 +363,16 @@ namespace osu.Game.Screens.Select
                 if (!this.IsCurrentScreen())
                     return;
 
+                updateBackgroundDim();
+            });
+
+            useEzBackground = ezConfig.GetBindable<bool>(Ez2Setting.SongSelectUseEzBackground);
+            useEzBackground.BindValueChanged(_ =>
+            {
+                if (!this.IsCurrentScreen())
+                    return;
+
+                RefreshBackground();
                 updateBackgroundDim();
             });
 
@@ -1074,22 +1086,32 @@ namespace osu.Game.Screens.Select
         /// </summary>
         public const float OFFICIAL_BACKGROUND_DIM = 0.1f;
 
-        private void updateBackgroundDim() => ApplyToBackground(backgroundModeBeatmap =>
+        protected override BackgroundScreen CreateBackground()
+            => useEzBackground.Value ? new BackgroundScreenDefault() : new BackgroundScreenBeatmap(Beatmap.Value);
+
+        private void updateBackgroundDim()
         {
-            backgroundModeBeatmap.Beatmap = Beatmap.Value;
+            // [Ez] 使用 Ez 背景（非谱面背景）时不参与谱面背景的暗度 / 虚化处理。
+            if (useEzBackground.Value)
+                return;
 
-            // [Ez] 选歌界面的暗度由 Ez 设置「选歌界面背景暗度」独占控制，毛玻璃 UI 开/关走同一条路径，
-            // 不再像以前那样在毛玻璃开启时借用游玩中的 DimLevel / BlurLevel。
-            backgroundModeBeatmap.IgnoreUserSettings.Value = true;
-            backgroundModeBeatmap.DimWhenUserSettingsIgnored.Value = songSelectBackgroundDim.Value;
+            ApplyToBackground(backgroundModeBeatmap =>
+            {
+                backgroundModeBeatmap.Beatmap = Beatmap.Value;
 
-            // Required to undo results screen dimming the background.
-            // Probably needs more thought because this needs to be in every `ApplyToBackground` currently to restore sane defaults.
-            backgroundModeBeatmap.FadeColour(Color4.White, 250);
+                // [Ez] 选歌界面的暗度由 Ez 设置「选歌界面背景暗度」独占控制，毛玻璃 UI 开/关走同一条路径，
+                // 不再像以前那样在毛玻璃开启时借用游玩中的 DimLevel / BlurLevel。
+                backgroundModeBeatmap.IgnoreUserSettings.Value = true;
+                backgroundModeBeatmap.DimWhenUserSettingsIgnored.Value = songSelectBackgroundDim.Value;
 
-            bool backgroundRevealActive = revealBackgroundDelegate?.State == ScheduledDelegate.RunState.Running || revealBackgroundDelegate?.State == ScheduledDelegate.RunState.Complete;
-            backgroundModeBeatmap.BlurAmount.Value = configBackgroundBlur.Value && !backgroundRevealActive ? 20 : 0f;
-        });
+                // Required to undo results screen dimming the background.
+                // Probably needs more thought because this needs to be in every `ApplyToBackground` currently to restore sane defaults.
+                backgroundModeBeatmap.FadeColour(Color4.White, 250);
+
+                bool backgroundRevealActive = revealBackgroundDelegate?.State == ScheduledDelegate.RunState.Running || revealBackgroundDelegate?.State == ScheduledDelegate.RunState.Complete;
+                backgroundModeBeatmap.BlurAmount.Value = configBackgroundBlur.Value && !backgroundRevealActive ? 20 : 0f;
+            });
+        }
 
         #endregion
 
