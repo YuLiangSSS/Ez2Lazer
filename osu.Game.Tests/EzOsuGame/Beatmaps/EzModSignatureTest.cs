@@ -53,6 +53,30 @@ namespace osu.Game.Tests.EzOsuGame.Beatmaps
         }
 
         [Test]
+        public void TestInvalidateRollsRerollsNullSeedButKeepsConcreteSeed()
+        {
+            // null 种子：失效后必须重掷，否则影射、随机 OD 这类 mod 在一次会话里只有一个结果。
+            var loose = new ManiaModCleanColumn();
+
+            int before = EzModSignature.ComputeResolvingSeeds(new Mod[] { loose });
+            EzModSeed.InvalidateRolls(new Mod[] { loose });
+            int after = EzModSignature.ComputeResolvingSeeds(new Mod[] { loose });
+
+            Assert.That(loose.Seed.Value, Is.Null, "失效不得把掷出的种子写回 bindable（设置界面的种子框要保持空）");
+            Assert.That(after, Is.Not.EqualTo(before), "失效之后必须掷出新的种子，键也要跟着变");
+
+            // 用户填的种子：失效不得动它。
+            var fixedSeed = new ManiaModNtoM { Seed = { Value = 4242 } };
+
+            int fixedBefore = EzModSignature.ComputeResolvingSeeds(new Mod[] { fixedSeed });
+            EzModSeed.InvalidateRolls(new Mod[] { fixedSeed });
+            int fixedAfter = EzModSignature.ComputeResolvingSeeds(new Mod[] { fixedSeed });
+
+            Assert.That(fixedSeed.Seed.Value, Is.EqualTo(4242));
+            Assert.That(fixedAfter, Is.EqualTo(fixedBefore));
+        }
+
+        [Test]
         public void TestResolvingSeedsLeavesConcreteSeedUntouched()
         {
             var mod = new ManiaModNtoM { Seed = { Value = 4242 } };

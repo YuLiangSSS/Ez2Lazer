@@ -66,6 +66,48 @@ namespace osu.Game.EzOsuGame.Mods
         }
 
         /// <summary>
+        /// Forgets the seeds <see cref="Resolve"/> rolled for <paramref name="mods"/>, so the next
+        /// resolve rolls again.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A roll is cached per bindable for as long as nobody forgets it, which is what makes a
+        /// conversion reproducible: the preview, the note statistics and the analysis of one selection
+        /// all agree on one roll. That caching is also a trap for a mod whose randomness the player is
+        /// supposed to <em>see</em> re-rolled - "random mirror" and friends would keep showing the one
+        /// orientation first rolled for the whole session.
+        /// </para>
+        /// <para>
+        /// Call this where a new attempt begins (a different beatmap / ruleset / mod selection), never
+        /// in the middle of serving one: the roll is part of the conversion cache key, so forgetting it
+        /// between two lookups makes those two lookups describe different beatmaps.
+        /// </para>
+        /// <para>
+        /// Bindables holding a seed the user actually typed are left alone - a concrete seed is a
+        /// reproducibility guarantee as well as a setting, so it is never re-rolled.
+        /// </para>
+        /// </remarks>
+        public static void InvalidateRolls(IEnumerable<Mod>? mods)
+        {
+            if (mods == null)
+                return;
+
+            foreach (var mod in mods)
+            {
+                if (mod is not IHasSeed hasSeed)
+                    continue;
+
+                var seed = hasSeed.Seed;
+
+                if (seed.Value is not null || !resolvedSeeds.TryGetValue(seed, out var cached))
+                    continue;
+
+                lock (cached.Gate)
+                    cached.Value = null;
+            }
+        }
+
+        /// <summary>
         /// Writes the seeds that <see cref="Resolve"/> rolled for <paramref name="mods"/> into their
         /// <c>Seed</c> bindables.
         /// </summary>

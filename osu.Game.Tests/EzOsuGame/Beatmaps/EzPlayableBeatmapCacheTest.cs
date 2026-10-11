@@ -9,6 +9,7 @@ using osu.Framework.Localisation;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.EzOsuGame.Beatmaps;
+using osu.Game.EzOsuGame.Mods;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Osu;
@@ -119,6 +120,42 @@ namespace osu.Game.Tests.EzOsuGame.Beatmaps
             EzPlayableBeatmapCache.GetShared(working, ruleset, new Mod[] { mod });
 
             Assert.That(working.Conversions, Is.EqualTo(1), "同一次掷出必须给出同一个键");
+        }
+
+        [Test]
+        public void TestInvalidatingRollsMakesTheSameQueryRollAndConvertAgain()
+        {
+            var working = createWorkingBeatmap();
+            var ruleset = working.BeatmapInfo.Ruleset;
+            var mod = new TestSeededMod();
+
+            EzPlayableBeatmapCache.GetShared(working, ruleset, new Mod[] { mod });
+            EzPlayableBeatmapCache.GetShared(working, ruleset, new Mod[] { mod });
+
+            Assert.That(working.Conversions, Is.EqualTo(1), "前置条件：未失效时同一次掷出应当命中");
+
+            // 新的一次选图 / 换 mod：随机 mod 必须重新掷，不能整个会话只显示第一次的结果。
+            EzModSeed.InvalidateRolls(new Mod[] { mod });
+
+            EzPlayableBeatmapCache.GetShared(working, ruleset, new Mod[] { mod });
+
+            Assert.That(working.Conversions, Is.EqualTo(2), "掷出的种子是键的一部分，失效之后必须重新转换");
+        }
+
+        [Test]
+        public void TestConcreteSeedIsNotInvalidated()
+        {
+            var working = createWorkingBeatmap();
+            var ruleset = working.BeatmapInfo.Ruleset;
+            var mod = new TestSeededMod { Seed = { Value = 1234 } };
+
+            EzPlayableBeatmapCache.GetShared(working, ruleset, new Mod[] { mod });
+
+            EzModSeed.InvalidateRolls(new Mod[] { mod });
+
+            EzPlayableBeatmapCache.GetShared(working, ruleset, new Mod[] { mod });
+
+            Assert.That(working.Conversions, Is.EqualTo(1), "用户填了种子就是可复现的承诺，不能被重新掷掉");
         }
 
         [Test]

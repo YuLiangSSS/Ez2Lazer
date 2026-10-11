@@ -40,6 +40,7 @@ using osu.Game.Graphics.UserInterface;
 using osu.Game.Input.Bindings;
 using osu.Game.EzOsuGame.Audio;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Mods;
 using osu.Game.EzOsuGame.Online;
 using osu.Game.EzOsuGame.Overlays;
 using osu.Game.EzOsuGame.UI;
@@ -937,6 +938,11 @@ namespace osu.Game.Screens.Select
         {
             if (!this.IsCurrentScreen())
                 return;
+
+            // [Ez] 新的一次「选图/换 mod」从这里开始：让带 null 种子的随机 mod 重新掷一次，
+            // 否则本次会话里预览与分析会一直显示第一次掷出的那个结果（例如随机镜像只有开/不开两个值，
+            // 掷一次之后玩家就再也看不到它「随机」了）。同一次选择内的所有消费者仍然共用这一次掷出。
+            EzModSeed.InvalidateRolls(Mods.Value);
 
             if (!ezBeatmapPreviewOverlay.ExpandedState.Value)
                 return;
