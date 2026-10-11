@@ -21,6 +21,7 @@ using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.Screens;
 using osu.Game.EzOsuGame.Skills;
+using osu.Game.EzOsuGame.UserInterface;
 using osu.Game.Graphics.Sprites;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
@@ -102,7 +103,7 @@ namespace osu.Game.EzOsuGame.HUD
         public BindableColour4 LabelColour { get; } = new BindableColour4(new Color4(255, 230, 128, 255));
 
         [SettingSource(typeof(EzHUDStrings), nameof(EzHUDStrings.RADAR_BASE_LINE_COLOUR), nameof(EzHUDStrings.RADAR_BASE_LINE_COLOUR_TOOLTIP), SettingControlType = typeof(EzSettingsColour))]
-        public BindableColour4 BaseLineColour { get; } = new BindableColour4(new Color4(32, 32, 32, 240));
+        public BindableColour4 BaseLineColour { get; } = new BindableColour4(new Color4(255, 255, 255, 51));
 
         [SettingSource(typeof(EzHUDStrings), nameof(EzHUDStrings.RADAR_BASE_AREA_COLOUR), nameof(EzHUDStrings.RADAR_BASE_AREA_COLOUR_TOOLTIP), SettingControlType = typeof(EzSettingsColour))]
         public BindableColour4 BaseAreaColour { get; } = new BindableColour4(new Color4(44, 44, 50, 128));
@@ -173,7 +174,7 @@ namespace osu.Game.EzOsuGame.HUD
         private ModSettingChangeTracker? modSettingTracker;
 
         private Container? axisLabelContainer;
-        private EzHUDRadarChart? chart;
+        private EzRadarChart? chart;
         private Box background = null!;
         private FillFlowContainer[] axisLabelContainers = Array.Empty<FillFlowContainer>();
         private string[] activeAxisLabels = default_axis_labels;
@@ -236,7 +237,7 @@ namespace osu.Game.EzOsuGame.HUD
                         },
                     },
                 },
-                chart = new EzHUDRadarChart
+                chart = new EzRadarChart
                 {
                     AxisCount = parameterRatios.Length,
                     Size = new Vector2(chart_size),
