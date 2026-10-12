@@ -1,8 +1,6 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
-using System;
-using System.Collections.Generic;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions.ObjectExtensions;
@@ -20,17 +18,18 @@ using osuTK;
 namespace osu.Game.Rulesets.Mania.UI
 {
     /// <summary>
-    /// Stage 背景：Panel 图和列虚化在同一个组件里。虚化开启时图只进入这一次虚化。
+    /// Stage 背景。Panel 是否显示由 <see cref="Ez2Setting.StageBackground"/> 决定，列虚化强度由 <see cref="Ez2Setting.ColumnBlur"/> 决定。
+    /// Panel 画在下层。列虚化用 <see cref="AcrylicBackdropDrawable"/>，模糊自己矩形下已经画好的谱面背景和 Panel。
     /// </summary>
     public partial class EzStageBackdrop : CompositeDrawable
     {
         private readonly LayoutValue layout = new LayoutValue(Invalidation.DrawSize);
-        private readonly PanelLayer panel;
-        private readonly BackdropBlurDrawable blur;
-        private StageBlurSources? captureSources;
+        private readonly Container panel;
+        private readonly AcrylicBackdropDrawable blur;
 
         private EzResourceStore resources = null!;
         private Bindable<string> backgroundName = null!;
+        private Bindable<Colour4> backgroundColour = null!;
         private Bindable<double> hitPosition = null!;
         private Bindable<bool> globalHitPosition = null!;
         private Bindable<double> columnBlur = null!;
@@ -43,9 +42,6 @@ namespace osu.Game.Rulesets.Mania.UI
         [Resolved(canBeNull: true)]
         private IScrollingInfo? scrollingInfo { get; set; }
 
-        [Resolved(canBeNull: true)]
-        private IBackdropCaptureSourceProvider? gameplayCapture { get; set; }
-
         public EzStageBackdrop()
         {
             AddLayout(layout);
@@ -57,8 +53,11 @@ namespace osu.Game.Rulesets.Mania.UI
 
             InternalChildren = new Drawable[]
             {
-                panel = new PanelLayer(),
-                blur = new BackdropBlurDrawable
+                panel = new Container
+                {
+                    RelativeSizeAxes = Axes.Both,
+                },
+                blur = new AcrylicBackdropDrawable
                 {
                     RelativeSizeAxes = Axes.Both,
                     Anchor = Anchor.Centre,
@@ -73,6 +72,7 @@ namespace osu.Game.Rulesets.Mania.UI
         {
             this.resources = resources;
             backgroundName = ezConfig.GetBindable<string>(Ez2Setting.StageBackground);
+            backgroundColour = ezConfig.GetBindable<Colour4>(Ez2Setting.StageBackgroundColour);
             hitPosition = ezConfig.GetBindable<double>(Ez2Setting.HitPosition);
             globalHitPosition = ezConfig.GetBindable<bool>(Ez2Setting.HitPositionGlobalEnable);
             columnBlur = ezConfig.GetBindable<double>(Ez2Setting.ColumnBlur);
@@ -80,9 +80,6 @@ namespace osu.Game.Rulesets.Mania.UI
 
             if (scrollingInfo != null)
                 direction.BindTo(scrollingInfo.Direction);
-
-            captureSources = new StageBlurSources(gameplayCapture, panel);
-            blur.CaptureSourceProvider = captureSources;
         }
 
         protected override void LoadComplete()
@@ -90,6 +87,7 @@ namespace osu.Game.Rulesets.Mania.UI
             base.LoadComplete();
 
             backgroundName.BindValueChanged(_ => applyTexture(), true);
+            backgroundColour.BindValueChanged(colour => panel.Colour = colour.NewValue, true);
             hitPosition.BindValueChanged(_ => layout.Invalidate());
             globalHitPosition.BindValueChanged(_ => layout.Invalidate());
             direction.BindValueChanged(_ => layout.Invalidate());
@@ -105,11 +103,9 @@ namespace osu.Game.Rulesets.Mania.UI
         {
             // 列模糊不走极速模式的配置压制，只在这个消费点跳过，避免换皮肤时把压制值写回皮肤 JSON。
             float sigma = EzTurboMode.Active ? 0 : (float)columnBlur.Value * 50;
-            bool enabled = sigma > 0.01f;
 
-            panel.DrawSharp = !enabled;
             blur.BlurSigma = new Vector2(sigma);
-            blur.EffectEnabled = enabled;
+            blur.EffectEnabled = sigma > 0.01f;
         }
 
         private void applyTexture()
@@ -144,15 +140,15 @@ namespace osu.Game.Rulesets.Mania.UI
             layout.Invalidate();
         }
 
-        private void updateLayout()
+        private bool updateLayout()
         {
             if (panel.Children.Count != 1 || DrawWidth <= 0)
-                return;
+                return false;
 
             Drawable graphic = panel.Children[0];
 
             if (graphic.Width <= 0)
-                return;
+                return false;
 
             float hit = ManiaPlayfieldLayoutHelper.GetHitPosition(skin, globalHitPosition.Value, hitPosition.Value);
 
@@ -161,108 +157,25 @@ namespace osu.Game.Rulesets.Mania.UI
             graphic.Anchor = graphic.Origin = receptorAtTop ? Anchor.TopCentre : Anchor.BottomCentre;
             graphic.Y = receptorAtTop ? hit : -hit;
             graphic.Scale = new Vector2(DrawWidth / graphic.Width);
+            return true;
         }
 
         protected override void Update()
         {
             base.Update();
 
-            if (!layout.IsValid)
-            {
-                updateLayout();
+            if (!layout.IsValid && updateLayout())
                 layout.Validate();
-            }
         }
 
         protected override void Dispose(bool isDisposing)
         {
             blur.EffectEnabled = false;
-            blur.CaptureSourceProvider = null;
-            blur.CaptureTarget = null;
-            blur.CaptureTargets.Clear();
-            captureSources?.Dispose();
-            captureSources = null;
 
             if (skin.IsNotNull())
                 skin.SourceChanged -= onSkinChanged;
 
             base.Dispose(isDisposing);
-        }
-
-        /// <summary>
-        /// 虚化开启时不参与父级绘制，只作为这一次虚化的捕获源。
-        /// </summary>
-        private sealed partial class PanelLayer : Container
-        {
-            public bool DrawSharp
-            {
-                get => drawSharp;
-                set
-                {
-                    if (drawSharp == value)
-                        return;
-
-                    drawSharp = value;
-                    Invalidate(Invalidation.Presence);
-                }
-            }
-
-            private bool drawSharp = true;
-
-            public PanelLayer()
-            {
-                RelativeSizeAxes = Axes.Both;
-            }
-
-            public override bool IsPresent => DrawSharp && base.IsPresent;
-        }
-
-        private sealed class StageBlurSources : IDisposable, IBackdropCaptureSourceProvider
-        {
-            private readonly IBackdropCaptureSourceProvider? gameplay;
-            private readonly Drawable panel;
-            private readonly List<Drawable> sources = new List<Drawable>();
-
-            private event Action sourcesChanged = delegate { };
-
-            event Action IBackdropCaptureSourceProvider.SourcesChanged
-            {
-                add => sourcesChanged += value;
-                remove => sourcesChanged -= value;
-            }
-
-            IReadOnlyList<Drawable> IBackdropCaptureSourceProvider.CaptureSources => sources;
-
-            public StageBlurSources(IBackdropCaptureSourceProvider? gameplay, Drawable panel)
-            {
-                this.gameplay = gameplay;
-                this.panel = panel;
-
-                if (gameplay != null)
-                    gameplay.SourcesChanged += rebuild;
-
-                rebuild();
-            }
-
-            private void rebuild()
-            {
-                sources.Clear();
-
-                if (gameplay?.CaptureSources != null)
-                {
-                    foreach (Drawable source in gameplay.CaptureSources)
-                        sources.Add(source);
-                }
-
-                sources.Add(panel);
-                sourcesChanged.Invoke();
-            }
-
-            public void Dispose()
-            {
-                if (gameplay != null)
-                    gameplay.SourcesChanged -= rebuild;
-            }
         }
     }
 }
