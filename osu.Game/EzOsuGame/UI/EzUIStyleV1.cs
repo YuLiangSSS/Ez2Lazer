@@ -4,13 +4,13 @@
 using osuTK;
 using osuTK.Graphics;
 
-namespace osu.Game.EzOsuGame.Acrylic
+namespace osu.Game.EzOsuGame.UI
 {
     /// <summary>
     /// Acrylic glass (N) appearance constants only — tune for hot reload.
     /// Classic chrome (M) is never half-alpha; use <see cref="UI.EzAcrylicOverlayAlpha.BindExclusive"/>.
     /// </summary>
-    public static class EzAcrylicStyle
+    public static class EzUIStyleV1
     {
         /// <summary>Cool dark veil over blurred backdrop (wedges / preview).</summary>
         public static readonly Color4 Veil = new Color4(8 / 255f, 10 / 255f, 14 / 255f, 0.40f);
@@ -38,6 +38,19 @@ namespace osu.Game.EzOsuGame.Acrylic
         /// </summary>
         public const float MENU_BUTTON_TINT_ALPHA = 0.55f;
 
-        public const float CORNER_RADIUS_DISPLAY = 4f;
+        /// <summary>Tier A: 大表面（卡片 / Wedge / 顶栏）。</summary>
+        public const float CORNER_RADIUS_WEDGE = 10f;
+
+        /// <summary>Tier B: Sheared 工具条（按钮 / 下拉 / 搜索框 / Mod 面板）。</summary>
+        public const float CORNER_RADIUS_SHEARED = 7f;
+
+        /// <summary>Tier C: 信息密度 chip（Spread / 小统计 / Tag / 图柱）。</summary>
+        public const float CORNER_RADIUS_CHIP = 4f;
+
+        /// <summary>Tier C micro: 近方形微型条。</summary>
+        public const float CORNER_RADIUS_MICRO = 1.5f;
+
+        /// <summary>Tier D: Footer 按钮。</summary>
+        public const float CORNER_RADIUS_FOOTER = 2f;
     }
 }
