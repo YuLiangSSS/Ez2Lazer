@@ -40,9 +40,11 @@ using osu.Game.Graphics.UserInterface;
 using osu.Game.Input.Bindings;
 using osu.Game.EzOsuGame.Audio;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Layout;
 using osu.Game.EzOsuGame.Mods;
 using osu.Game.EzOsuGame.Online;
 using osu.Game.EzOsuGame.Overlays;
+using osu.Game.EzOsuGame.Pets;
 using osu.Game.EzOsuGame.UI;
 using osu.Game.EzOsuGame.UserInterface;
 using osu.Game.Localisation;
@@ -172,6 +174,12 @@ namespace osu.Game.Screens.Select
 
         [Resolved]
         private IOverlayManager? overlayManager { get; set; }
+
+        [Resolved]
+        private EzLayoutLayer? ezLayoutLayer { get; set; }
+
+        [Resolved]
+        private EzDesktopPetLayer? ezDesktopPetLayer { get; set; }
 
         private InputManager inputManager = null!;
 
@@ -495,6 +503,13 @@ namespace osu.Game.Screens.Select
             inputManager = GetContainingInputManager()!;
 
             FilterControl.CriteriaChanged += criteriaChanged;
+
+            // 全屏预览会铺满屏幕，隐藏游戏级 Ez 布局层的选歌 HUD 与桌宠（含 Live2D），避免被其遮挡。
+            ezBeatmapPreviewOverlay.FullMapFocusState.BindValueChanged(e =>
+            {
+                ezLayoutLayer?.SongSelectLayoutSuppressed = e.NewValue;
+                ezDesktopPetLayer?.TemporaryHidden = e.NewValue;
+            });
 
             modSelectOverlay.State.BindValueChanged(v =>
             {
@@ -866,8 +881,7 @@ namespace osu.Game.Screens.Select
 
         private void onArrivingAtScreen()
         {
-            if (manageCollectionsDialog != null)
-                manageCollectionsDialog.FilteredBeatmapsProvider = getFilteredBeatmaps;
+            manageCollectionsDialog?.FilteredBeatmapsProvider = getFilteredBeatmaps;
 
             modSelectOverlay.Beatmap.BindTo(Beatmap);
             modSelectOverlay.Ruleset.BindTo(Ruleset);
@@ -981,8 +995,7 @@ namespace osu.Game.Screens.Select
 
             restoreBackground();
 
-            if (manageCollectionsDialog != null)
-                manageCollectionsDialog.FilteredBeatmapsProvider = null;
+            manageCollectionsDialog?.FilteredBeatmapsProvider = null;
 
             ezBeatmapPreviewOverlay.SuspendForScreenExit();
 
