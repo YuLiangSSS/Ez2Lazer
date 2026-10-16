@@ -64,7 +64,7 @@ namespace osu.Game.Rulesets.Mania.UI
         private OrderedHitPolicyHelper hitPolicyHelper = null!;
         private DrawableHitObject? columnRoutedPressTarget;
         private EzEnumJudgePrecedence judgePrecedence;
-        private EzEnumHitMode? configuredMissCollectionHitMode;
+        private EzEnumJudgeMode? configuredMissCollectionJudgeMode;
 
         /// <summary>命中时「提前判定为 miss」的条目缓冲，避免每次命中分配一个迭代器。</summary>
         private readonly List<ManiaLaneEntry> forceMissScratch = new List<ManiaLaneEntry>();
@@ -130,7 +130,7 @@ namespace osu.Game.Rulesets.Mania.UI
 
         internal IReadOnlyList<double> PressTimes => pressTimes;
 
-        internal bool TryGetBmsRoute(DrawableNote note, out BmsHitModeJudgement.BmsRouteState route)
+        internal bool TryGetBmsRoute(DrawableNote note, out BmsJudgeModeJudgement.BmsRouteState route)
         {
             if (LaneController.TryGetEntry(note, out var entry))
             {
@@ -487,7 +487,8 @@ namespace osu.Game.Rulesets.Mania.UI
 
             // 取样必须先于路由判定：判定一落地，本次 note 即为「已判定」，触发源会改取「下一颗」或回退到
             // 「上一个已判定对象」，后者会把上一颗的键音再触发一次（同名键音被发声池打断后从头重播）。
-            if (keySoundPreviewMode != KeySoundPreviewMode.AutoPlayPlus)
+            // 只有「按键音预览」这一档在按键时取样：Off 不发声；AutoPlayPlus 的 note 音由物件自身时间轴发声，按键不得再来一次。
+            if (keySoundPreviewMode == KeySoundPreviewMode.AutoPreview)
                 sampleTriggerSource.Play();
 
             if (drawableRuleset?.ColumnRoutesInput == true)
@@ -546,25 +547,25 @@ namespace osu.Game.Rulesets.Mania.UI
 
         private void ensureLaneConfigured(ManiaJudgementRound round)
         {
-            var hitMode = round.Environment.ManiaHitMode;
+            var judgeMode = round.Environment.JudgeMode;
 
-            if (configuredMissCollectionHitMode == hitMode)
+            if (configuredMissCollectionJudgeMode == judgeMode)
                 return;
 
-            configuredMissCollectionHitMode = hitMode;
+            configuredMissCollectionJudgeMode = judgeMode;
             double overallDifficulty = drawableRuleset?.Beatmap.Difficulty.OverallDifficulty ?? 5;
-            LaneController.ConfigureMissCollection(hitMode, overallDifficulty);
-            pressHistoryRetentionMs = computePressHistoryRetentionMs(hitMode, overallDifficulty);
+            LaneController.ConfigureMissCollection(judgeMode, overallDifficulty);
+            pressHistoryRetentionMs = computePressHistoryRetentionMs(judgeMode, overallDifficulty);
         }
 
-        private static double computePressHistoryRetentionMs(EzEnumHitMode hitMode, double overallDifficulty)
+        private static double computePressHistoryRetentionMs(EzEnumJudgeMode judgeMode, double overallDifficulty)
         {
-            var helper = new HitModeHelper(hitMode) { OverallDifficulty = overallDifficulty };
+            var helper = new JudgeModeHelper(judgeMode) { OverallDifficulty = overallDifficulty };
             double early = helper.WindowFor(HitResult.Miss, true);
             double late = helper.WindowFor(HitResult.Miss, false);
 
-            if (HitModeHelper.IsBMSHitMode(hitMode))
-                BmsHitModeJudgement.ExpandMissCollectionWindows(helper, 1, ref early, ref late);
+            if (JudgeModeHelper.IsBMSJudgeMode(judgeMode))
+                BmsJudgeModeJudgement.ExpandMissCollectionWindows(helper, 1, ref early, ref late);
 
             // Keep enough history for nearest-press miss offset (several miss windows + margin).
             // Avoid the old 120s floor which retained ~2 minutes of presses per column at high KPS.

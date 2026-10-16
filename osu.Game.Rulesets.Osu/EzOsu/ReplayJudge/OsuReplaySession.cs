@@ -20,7 +20,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
     /// 无绘制 Osu replay Session：影子判定 → <see cref="JudgementProcessor.ApplyResult"/> → PopulateScore。
     /// </summary>
     /// <remarks>
-    /// 判定由 <see cref="Session.OsuReplaySessionEngine"/> 驱动（OSL-011 Mapping；ClassicNative 见 OSL-013）。
+    /// 判定由 <see cref="Session.OsuReplaySessionEngine"/> 驱动（OSL-011 Mapping；StableClassic 见 OSL-013）。
     /// </remarks>
     public static class OsuReplaySession
     {
@@ -30,6 +30,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
 
             score.ScoreInfo.HitEvents = scoreProcessor.HitEvents.ToList();
             scoreProcessor.PopulateScore(score.ScoreInfo);
+            score.ScoreInfo.JudgeMode = (int)environment.JudgeMode;
 
             return score;
         }
@@ -50,6 +51,7 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
 
             score.ScoreInfo.HitEvents = scoreProcessor.HitEvents.ToList();
             scoreProcessor.PopulateScore(score.ScoreInfo);
+            score.ScoreInfo.JudgeMode = (int)environment.JudgeMode;
 
             return (score, timeline ?? new EzScoreTimeline(Array.Empty<EzScoreTimelineSnapshot>()));
         }
@@ -80,12 +82,12 @@ namespace osu.Game.Rulesets.Osu.EzOsu.ReplayJudge
             beatmapProcessor?.PostProcess();
 
             if (scoreProcessor is OsuScoreProcessor osuSp)
-                osuSp.JudgementTrackOverride = environment.OsuJudgementTrack;
+                osuSp.JudgementTrackOverride = environment.JudgeMode;
 
-            if (score.ScoreInfo.IsLegacyScore || OsuClassicNativeScoring.ShouldUseLegacyScoreAlgorithm(environment.OsuJudgementTrack))
+            if (score.ScoreInfo.IsLegacyScore || OsuStableClassicScoring.ShouldUseLegacyScoreAlgorithm(environment.JudgeMode))
                 scoreProcessor.IsLegacyScore = true;
 
-            // ClassicNative 窗口在 OsuScoreProcessor.ApplyBeatmap 内注入（与 live Drawable 同路）。
+            // StableClassic 窗口在 OsuScoreProcessor.ApplyBeatmap 内注入（与 live Drawable 同路）。
             scoreProcessor.ApplyBeatmap(beatmap);
 
             foreach (var mod in resolvedMods.OfType<IApplicableToScoreProcessor>())

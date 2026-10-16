@@ -30,8 +30,8 @@ using osu.Game.Resources.Localisation.Web;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI;
-using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Scoring.Bonus;
 using osu.Game.Scoring;
@@ -112,24 +112,60 @@ namespace osu.Game.Screens.Select
 
                 private ScoreInfo score = null!;
 
-                private IBindable<bool> hideScores = null!;
-
                 public ScoreInfo Score
                 {
                     get => score;
                     set
                     {
                         score = value;
-                        updateStatistics();
+
+                        updateAbsoluteDate();
+                        relativeDate.Date = value.Date;
+
+                        var judgementsStatistics = value.GetStatisticsForDisplay().Select(s =>
+                            new StatisticRow(s.DisplayName.ToUpper(), s.Count.ToLocalisableString("N0"), colours.ForHitResult(s.Result)));
+
+                        var ruleset = value.Ruleset.CreateInstance();
+                        var scoreMultiplierCalculator = ruleset.CreateScoreMultiplierCalculator(new ScoreMultiplierContext(score.BeatmapInfo!.Difficulty));
+                        double multiplier = scoreMultiplierCalculator.CalculateFor(value.Mods);
+
+                        var generalStatistics = new List<Drawable>
+                        {
+                            new StatisticRow(BeatmapsetsStrings.ShowScoreboardHeadersCombo, value.MaxCombo.ToLocalisableString(@"0\x")),
+                            new StatisticRow(BeatmapsetsStrings.ShowScoreboardHeadersAccuracy, value.Accuracy.FormatAccuracy()),
+                            new PerformanceStatisticRow(BeatmapsetsStrings.ShowScoreboardHeaderspp.ToUpper(), score),
+                        };
+
+                        if (value.TryGetManiaGameplayModes(out int judgeMode, out int healthMode))
+                        {
+                            // Lazer 是默认档，不展示；仅画非默认的档位。
+                            if (judgeMode != (int)EzEnumJudgeMode.Lazer || healthMode != (int)EzEnumHealthMode.Lazer)
+                                generalStatistics.Add(Empty().With(d => d.Height = 10));
+
+                            if (judgeMode != (int)EzEnumJudgeMode.Lazer)
+                                generalStatistics.Add(new StatisticRow("HIT", EzScoreInfoExtensions.GetJudgeModeDisplayName(judgeMode)));
+
+                            if (healthMode != (int)EzEnumHealthMode.Lazer)
+                                generalStatistics.Add(new StatisticRow("HP", EzScoreInfoExtensions.GetHealthModeDisplayName(healthMode)));
+                        }
+                        else if (value.TryGetStdGameplayMode(out int stdMode) && stdMode != (int)EzEnumJudgeMode.Lazer)
+                        {
+                            generalStatistics.Add(Empty().With(d => d.Height = 10));
+                            generalStatistics.Add(new StatisticRow("JUDGE", EzScoreInfoExtensions.GetJudgeModeDisplayName(stdMode)));
+                        }
+
+                        generalStatistics.Add(Empty().With(d => d.Height = 20));
+                        generalStatistics.Add(new StatisticRow(ModSelectOverlayStrings.ScoreMultiplier, ModUtils.FormatScoreMultiplier(multiplier)));
+
+                        statistics.ChildrenEnumerable = judgementsStatistics
+                                                        .Append(Empty().With(d => d.Height = 20))
+                                                        .Concat(generalStatistics);
                     }
                 }
 
                 [BackgroundDependencyLoader]
-                private void load(OsuConfigManager configManager, Ez2ConfigManager ezConfig)
+                private void load(OsuConfigManager configManager)
                 {
-                    hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
-                    hideScores.BindValueChanged(_ => updateStatistics());
-
                     RelativeSizeAxes = Axes.X;
                     AutoSizeAxes = Axes.Y;
                     CornerRadius = corner_radius;
@@ -206,49 +242,6 @@ namespace osu.Game.Screens.Select
                     configManager.BindWith(OsuSetting.Prefer24HourTime, prefer24HourTime);
                 }
 
-                private void updateStatistics()
-                {
-                    if (score == null)
-                        return;
-
-                    updateAbsoluteDate();
-                    relativeDate.Date = score.Date;
-
-                    var judgementsStatistics = score.GetStatisticsForDisplay().Select(s =>
-                        new StatisticRow(s.DisplayName.ToUpper(), maskDigits(s.Count.ToLocalisableString("N0")), colours.ForHitResult(s.Result)));
-
-                    var ruleset = score.Ruleset.CreateInstance();
-                    var scoreMultiplierCalculator = ruleset.CreateScoreMultiplierCalculator(new ScoreMultiplierContext(score.BeatmapInfo!.Difficulty));
-                    double multiplier = scoreMultiplierCalculator.CalculateFor(score.Mods);
-
-                    var generalStatistics = new List<Drawable>
-                    {
-                        new StatisticRow(BeatmapsetsStrings.ShowScoreboardHeadersCombo, maskDigits(score.MaxCombo.ToLocalisableString(@"0\x"))),
-                        new StatisticRow(BeatmapsetsStrings.ShowScoreboardHeadersAccuracy, maskDigits(score.Accuracy.FormatAccuracy())),
-                        new PerformanceStatisticRow(BeatmapsetsStrings.ShowScoreboardHeaderspp.ToUpper(), score),
-                    };
-
-                    if (score.TryGetManiaGameplayModes(out int hitMode, out int healthMode))
-                    {
-                        generalStatistics.Add(Empty().With(d => d.Height = 10));
-                        generalStatistics.Add(new StatisticRow("HIT", EzManiaScoreModeExtensions.GetHitModeDisplayName(hitMode)));
-                        generalStatistics.Add(new StatisticRow("HP", EzManiaScoreModeExtensions.GetHealthModeDisplayName(healthMode)));
-                    }
-
-                    generalStatistics.Add(Empty().With(d => d.Height = 20));
-                    generalStatistics.Add(new StatisticRow(ModSelectOverlayStrings.ScoreMultiplier, ModUtils.FormatScoreMultiplier(multiplier)));
-
-                    statistics.ChildrenEnumerable = judgementsStatistics
-                                                    .Append(Empty().With(d => d.Height = 20))
-                                                    .Concat(generalStatistics);
-                }
-
-                /// <summary>
-                /// 「隐藏成绩」开启时把数字字符替换为 '*'，其它符号保持不变。
-                /// </summary>
-                private LocalisableString maskDigits(LocalisableString value)
-                    => hideScores?.Value == true ? EzScoreVisibility.Mask(value.ToString()) : value;
-
                 protected override void LoadComplete()
                 {
                     base.LoadComplete();
@@ -304,8 +297,6 @@ namespace osu.Game.Screens.Select
             {
                 private readonly ScoreInfo score;
 
-                private IBindable<bool> hideScores = null!;
-
                 public PerformanceStatisticRow(LocalisableString label, ScoreInfo score)
                     : base(label, @"0pp")
                 {
@@ -313,10 +304,8 @@ namespace osu.Game.Screens.Select
                 }
 
                 [BackgroundDependencyLoader]
-                private void load(BeatmapDifficultyCache difficultyCache, CancellationToken? cancellationToken, Ez2ConfigManager ezConfig)
+                private void load(BeatmapDifficultyCache difficultyCache, CancellationToken? cancellationToken)
                 {
-                    hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
-
                     if (score.PP.HasValue)
                     {
                         setPerformanceValue(score, score.PP.Value);
@@ -341,8 +330,7 @@ namespace osu.Game.Screens.Select
                 private void setPerformanceValue(ScoreInfo scoreInfo, double pp)
                 {
                     int ppValue = (int)Math.Round(pp, MidpointRounding.AwayFromZero);
-                    string formatted = $"{ppValue:N0}pp";
-                    ValueText.Text = hideScores?.Value == true ? EzScoreVisibility.Mask(formatted) : formatted;
+                    ValueText.Text = LocalisableString.Interpolate(@$"{ppValue:N0}pp");
 
                     if (!scoreInfo.BeatmapInfo!.Status.GrantsPerformancePoints() || hasUnrankedMods(scoreInfo))
                         Alpha = 0.5f;
@@ -436,8 +424,6 @@ namespace osu.Game.Screens.Select
                 [Resolved]
                 private ScoreManager scoreManager { get; set; } = null!;
 
-                private IBindable<bool> hideScores = null!;
-
                 public ScoreInfo Score
                 {
                     set
@@ -447,16 +433,13 @@ namespace osu.Game.Screens.Select
                             OsuColour.ForRank(value.Rank).Opacity(0.5f));
                         rankContainer.Child = new DrawableRank(value.Rank);
                         totalScore.Current = scoreManager.GetBindableTotalScoreString(value);
-                        totalScore.Current = EzScoreVisibility.CreateMaskedBindable(scoreManager.GetBindableTotalScoreString(value), hideScores);
                         bonusLines.SetScore(value);
                     }
                 }
 
                 [BackgroundDependencyLoader]
-                private void load(Ez2ConfigManager ezConfig)
+                private void load()
                 {
-                    hideScores = ezConfig.GetBindable<bool>(Ez2Setting.HideScores);
-
                     RelativeSizeAxes = Axes.X;
                     AutoSizeAxes = Axes.Y;
                     CornerRadius = corner_radius;

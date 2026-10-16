@@ -169,7 +169,7 @@ namespace osu.Game.Screens.Ranking.Contracted
                                                 }),
                                             ]
                                         },
-                                        EzManiaScoreModeExtensions.CreateDisplayDrawable(score, fontSize: 10, anchor: Anchor.TopLeft)
+                                        EzScoreInfoExtensions.CreateDisplayDrawable(score, fontSize: 10, anchor: Anchor.TopLeft)
                                     }
                                 }
                             }
