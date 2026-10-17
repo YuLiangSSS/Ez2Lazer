@@ -46,6 +46,8 @@ namespace osu.Game.Rulesets.Mania.UI
         private readonly JudgementContainer<DrawableManiaJudgement> judgements;
         private readonly JudgementPooler<DrawableManiaJudgement> judgementPooler;
 
+        private readonly ManiaJudgementLine judgementLine;
+
         private readonly Drawable barLineContainer;
 
         public override bool ReceivePositionalInputAt(Vector2 screenSpacePos)
@@ -158,13 +160,11 @@ namespace osu.Game.Rulesets.Mania.UI
                                 {
                                     RelativeSizeAxes = Axes.Both,
                                 },
-                                new Box
+                                judgementLine = new ManiaJudgementLine
                                 {
-                                    Anchor = Anchor.CentreLeft,
-                                    RelativeSizeAxes = Axes.X,
-                                    Height = 1,
-                                    Colour = Colour4.White,
-                                    Alpha = ShowJudgementLine ? 0.9f : 0
+                                    // Always present so the playfield and the extension columns can show the same line;
+                                    // the editor enables it, gameplay keeps it invisible.
+                                    Alpha = ShowJudgementLine ? ManiaJudgementLine.LINE_ALPHA : 0,
                                 }
                             }
                         },
