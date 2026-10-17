@@ -8,9 +8,9 @@ using osu.Framework.Extensions.ObjectExtensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Shapes;
+using osu.Framework.Logging;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.Rulesets.Judgements;
-using osu.Framework.Logging;
 using osu.Game.Rulesets.Mania.Beatmaps;
 using osu.Game.Rulesets.Mania.EzMania;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
@@ -70,7 +70,18 @@ namespace osu.Game.Rulesets.Mania.UI
         private Bindable<double> columnDim = null!;
 
         private readonly Box dimBox;
-        private readonly SkinnableDrawable stageForeground;
+        public readonly SkinnableDrawable StageBackground;
+        public readonly SkinnableDrawable StageForeground;
+
+        /// <summary>
+        /// Whether the stage panel may be shown at all. Stages used by the ruleset editor override this.
+        /// </summary>
+        protected virtual bool AllowStagePanel => true;
+
+        /// <summary>
+        /// Whether the JudgementLine should be shown.
+        /// </summary>
+        protected virtual bool ShowJudgementLine => false;
 
         public Stage(int firstColumnIndex, StageDefinition definition, ref ManiaAction columnStartAction)
         {
@@ -103,7 +114,7 @@ namespace osu.Game.Rulesets.Mania.UI
                     AutoSizeAxes = Axes.X,
                     Children = new Drawable[]
                     {
-                        new SkinnableDrawable(new ManiaSkinComponentLookup(ManiaSkinComponents.StageBackground), _ => new DefaultStageBackground())
+                        StageBackground = new SkinnableDrawable(new ManiaSkinComponentLookup(ManiaSkinComponents.StageBackground), _ => new DefaultStageBackground())
                         {
                             RelativeSizeAxes = Axes.Both
                         },
@@ -134,17 +145,28 @@ namespace osu.Game.Rulesets.Mania.UI
                         {
                             RelativeSizeAxes = Axes.Y,
                         },
-                        stageForeground = new SkinnableDrawable(new ManiaSkinComponentLookup(ManiaSkinComponents.StageForeground))
+                        StageForeground = new SkinnableDrawable(new ManiaSkinComponentLookup(ManiaSkinComponents.StageForeground))
                         {
                             RelativeSizeAxes = Axes.Both
                         },
                         new HitPositionPaddedContainer
                         {
                             RelativeSizeAxes = Axes.Both,
-                            Child = judgements = new JudgementContainer<DrawableManiaJudgement>
+                            Children = new Drawable[]
                             {
-                                RelativeSizeAxes = Axes.Both,
-                            },
+                                judgements = new JudgementContainer<DrawableManiaJudgement>
+                                {
+                                    RelativeSizeAxes = Axes.Both,
+                                },
+                                new Box
+                                {
+                                    Anchor = Anchor.CentreLeft,
+                                    RelativeSizeAxes = Axes.X,
+                                    Height = 1,
+                                    Colour = Colour4.White,
+                                    Alpha = ShowJudgementLine ? 0.9f : 0
+                                }
+                            }
                         },
                         topLevelContainer = new Container { RelativeSizeAxes = Axes.Both }
                     }
@@ -203,13 +225,29 @@ namespace osu.Game.Rulesets.Mania.UI
             }, true);
 
             var stagePanelEnabled = ezSkinConfig.GetBindable<bool>(Ez2Setting.StagePanelEnabled);
-            stagePanelEnabled.BindValueChanged(e =>
+            stagePanelEnabled.BindValueChanged(setStagePanelVisible, true);
+        }
+
+        private void setStagePanelVisible(ValueChangedEvent<bool> b)
+        {
+            if (!AllowStagePanel)
             {
-                if (e.NewValue)
-                    stageForeground.Show();
+                StageBackground.Alpha = 0;
+                StageForeground.Alpha = 0;
+            }
+            else
+            {
+                if (b.NewValue)
+                {
+                    StageBackground.Show();
+                    StageForeground.Show();
+                }
                 else
-                    stageForeground.Hide();
-            }, true);
+                {
+                    StageBackground.Hide();
+                    StageForeground.Hide();
+                }
+            }
         }
 
         private void onSkinChanged()
