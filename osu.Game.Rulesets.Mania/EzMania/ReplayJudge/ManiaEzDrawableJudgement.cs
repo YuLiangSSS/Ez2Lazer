@@ -20,6 +20,7 @@ using osu.Game.Rulesets.Mania.UI;
 using osu.Game.Rulesets.Objects.Drawables;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI;
+using osu.Game.Screens.Play;
 
 namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 {
@@ -36,6 +37,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
         private static readonly ConditionalWeakTable<DrawableHoldNote, Ez2AcHoldState> ez2ac_hold_states =
             new ConditionalWeakTable<DrawableHoldNote, Ez2AcHoldState>();
+
+        private static readonly ConditionalWeakTable<DrawableHoldNote, StableClassicHoldState> stable_classic_hold_states =
+            new ConditionalWeakTable<DrawableHoldNote, StableClassicHoldState>();
 
         public static bool CanRouteToKPoor(DrawableNote note) => GetBmsState(note).CanRouteToKPoor;
 
@@ -199,6 +203,133 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
         internal static Ez2AcHoldState GetEz2AcHoldState(DrawableHoldNote hold)
             => ez2ac_hold_states.GetValue(hold, _ => new Ez2AcHoldState());
 
+        /// <summary>
+        /// stable classic 的 per-LN 持有态：尾判需要「最近按下 / 首次有效松开 / 断连」，同一条 LN 只出一个档位。
+        /// </summary>
+        /// <remarks>
+        /// 状态按 <see cref="DrawableHoldNote"/> 实例缓存，而该实例由对象池复用、会顺序承载多条 LN，
+        /// 故每次取用时按谱面条目换绑（见 <see cref="StableClassicHoldState.EnsureBoundTo"/>）。
+        /// </remarks>
+        internal static StableClassicHoldState GetStableClassicHoldState(DrawableHoldNote hold)
+        {
+            var state = stable_classic_hold_states.GetValue(
+                hold,
+                _ => new StableClassicHoldState(hold.HitObject.StartTime, hold.HitObject.EndTime));
+
+            if (hold.Entry is { } entry)
+                state.EnsureBoundTo(entry, hold.HitObject.StartTime, hold.HitObject.EndTime);
+
+            return state;
+        }
+
+        /// <summary>
+        /// stable classic：松手。只有不早于 <c>EndTime - HitWindow50</c> 的松手算有效松开，更早的只标断连。
+        /// </summary>
+        internal static void NotifyStableClassicReleased(DrawableHoldNote hold)
+        {
+            var round = getJudgementRound(hold);
+
+            if (!StableClassicJudgeModeJudgement.IsSelected(round.Environment.JudgeMode))
+                return;
+
+            double releaseWindow = hold.Tail.HitObject.HitWindows?.WindowFor(HitResult.Meh) ?? 0;
+            GetStableClassicHoldState(hold).OnReleased(hold.Time.Current, releaseWindow);
+        }
+
+        /// <summary>
+        /// stable classic 长条持有期的连击增量：每 100ms 一枚，只推 combo，不加分、不进判定计数。
+        /// </summary>
+        /// <remarks>
+        /// 局内与 <see cref="ManiaReplaySessionSimulator"/> 必须同源，否则总分只在 Session 侧多出增量。
+        /// 帧钟与 <see cref="StableClassicHoldState"/> 共用；后退时直接返回，由 <c>ResetFromReplayFrame</c> 重建累加器。
+        /// </remarks>
+        internal static void TryStableClassicHoldComboTick(DrawableHoldNote hold)
+        {
+            if (hold.EzDrawableManiaRuleset is not { JudgementRound: { } round, StableClassicComboProcessor: { } processor })
+                return;
+
+            if (!StableClassicJudgeModeJudgement.IsSelected(round.Environment.JudgeMode))
+                return;
+
+            if ((hold.Clock as IGameplayClock)?.IsRewinding == true)
+                return;
+
+            if (GetStableClassicHoldState(hold).TryAdvanceHoldComboTick(hold.Time.Current))
+                processor.ApplyClassicHoldCombo();
+        }
+
+        /// <summary>
+        /// stable classic：按住不松时尾在 <c>EndTime + HitWindow50</c> 到点落判（该时刻把
+        /// <c>TimeRelease</c> 写成当前时刻）。父 Hold 的收束仍交给 <c>DrawableHoldNote</c>。
+        /// </summary>
+        internal static void TryStableClassicSettleHeldTail(DrawableHoldNote hold)
+        {
+            // 每帧调用：只读已缓存的 round，未缓存时不做判定（与 TryO2HoldUpdate 同）。
+            if (hold.EzDrawableManiaRuleset?.JudgementRound is not { } round
+                || !StableClassicJudgeModeJudgement.IsSelected(round.Environment.JudgeMode))
+                return;
+
+            if (hold.Tail.AllJudged || !hold.IsHolding.Value)
+                return;
+
+            double settleTime = hold.Tail.HitObject.StartTime + (hold.Tail.HitObject.HitWindows?.WindowFor(HitResult.Meh) ?? 0);
+
+            if (hold.Time.Current < settleTime)
+                return;
+
+            hold.Tail.UpdateResult();
+            hold.EzTryFinalizeAfterTailJudged();
+        }
+
+        /// <summary>
+        /// stable classic：过 <c>StartTime + HitWindow50</c> 仍从未按下时立即断连。
+        /// </summary>
+        /// <remarks>
+        /// 只落 Body 的 ComboBreak 并置断连标志，尾判仍由尾结算负责，LN 可继续重抓。
+        /// 已按下过（含已提前松手断连）时不补判，避免与松手路径重复发断连。
+        /// </remarks>
+        internal static void TryStableClassicHoldBreak(DrawableHoldNote hold)
+        {
+            // 每帧调用：只读已缓存的 round，未缓存时不做判定（与 TryStableClassicSettleHeldTail 同）。
+            if (hold.EzDrawableManiaRuleset?.JudgementRound is not { } round
+                || !StableClassicJudgeModeJudgement.IsSelected(round.Environment.JudgeMode))
+                return;
+
+            if (hold.Tail.AllJudged || hold.Body.AllJudged)
+                return;
+
+            var state = GetStableClassicHoldState(hold);
+
+            if (state.TimePress != null || state.Pressed || state.HasHoldBreak)
+                return;
+
+            double breakTime = hold.Head.HitObject.StartTime + (hold.Tail.HitObject.HitWindows?.WindowFor(HitResult.Meh) ?? 0);
+
+            if (hold.Time.Current < breakTime)
+                return;
+
+            // 实时持有态：同一次松手可能同时经 Column 与 Hold 结算，缓存 bindable 会读到旧值。
+            if (hold.Result.IsHolding(hold.Time.Current))
+                return;
+
+            state.MarkHoldBreak();
+            hold.Body.TriggerResult(false);
+        }
+
+        /// <summary>
+        /// stable classic：头已判定后重按同一条 LN（断连后再抓）。按下分支只在未按住时进入，
+        /// 因此重按会刷新 <c>TimePress</c>（尾判的按下基准）。
+        /// </summary>
+        internal static void NotifyStableClassicRepress(DrawableHoldNote hold)
+        {
+            var round = getJudgementRound(hold);
+
+            if (!StableClassicJudgeModeJudgement.IsSelected(round.Environment.JudgeMode))
+                return;
+
+            GetStableClassicHoldState(hold).OnPressed(hold.Time.Current);
+        }
+
         /// <summary>头判定应用后同步 EZ2AC LN 状态机。</summary>
         internal static void NotifyEz2AcHeadJudged(DrawableHoldNote hold, HitResult headResult, bool wasHoldingBeforePress)
         {
@@ -273,12 +404,18 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             {
                 case ManiaNoteJudgementOutcomeKind.Apply:
                     if (!userTriggered && outcome.Result == HitResult.Miss)
-                        drawable.EzApplyPassiveMissWithStoredOffset();
+                        drawable.EzApplyPassiveMissWithStoredOffset(resolveStableClassicHeadResult(drawable, round, HitResult.Miss));
                     else
-                        drawable.EzApplyFinalResult(outcome.Result, round.Environment.JudgeMode);
+                        drawable.EzApplyFinalResult(resolveStableClassicHeadResult(drawable, round, outcome.Result), round.Environment.JudgeMode);
 
                     if (drawable is DrawableHoldNoteHead head && head.ParentHold is DrawableHoldNote hold)
+                    {
                         NotifyEz2AcHeadJudged(hold, outcome.Result, wasHoldingBeforePress: false);
+
+                        // stable classic：喂按下边沿（尾判的时间基准），头本身的判定被压成 IgnoreHit。
+                        if (userTriggered && StableClassicJudgeModeJudgement.IsSelected(round.Environment.JudgeMode))
+                            GetStableClassicHoldState(hold).OnPressed(drawable.Time.Current);
+                    }
 
                     break;
 
@@ -345,7 +482,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             // UpdateResult(false) 已通过 ShouldDeferAutoMissUpdate；勿再调 Gate（曾每帧 WindowFor）。
             // 用户按键路径仍可能走 UpdateResult(true)，Gate 不适用。
 
-            if (!round.IsEzJudgeMode || round.Strategy == null)
+            if (round.Strategy == null)
                 return false;
 
             var bmsState = round.Strategy is BmsJudgeModeJudgement ? GetBmsState(drawable) : null;
@@ -375,8 +512,21 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
 
             // 同 Note：automiss 已在 ShouldDefer 过滤。
 
-            if (!round.IsEzJudgeMode)
+            if (round.Strategy == null)
                 return false;
+
+            // stable classic：尾判只在尾「可判」时发起（松手宽限同 lazer，即 HitWindows.ResultFor 会给档的范围）。
+            // 到点判尾由帧钟触发，过早的松手只记断连、不落判；不设这道 gate，
+            // `DrawableHoldNote.OnReleased` 的 `Tail.UpdateResult()` 会在提前松手那一刻当场判 Miss
+            // （Session 侧的同类松手有候选窗 gate，于是两侧同源破裂）。
+            if (StableClassicJudgeModeJudgement.IsSelected(round.Environment.JudgeMode)
+                && timeOffset < 0
+                && drawable.HitObject.HitWindows is { } tailWindows
+                && !ReferenceEquals(tailWindows, HitWindows.Empty)
+                && -timeOffset > tailWindows.WindowFor(HitResult.Miss) * TailNote.RELEASE_WINDOW_LENIENCE)
+            {
+                return false;
+            }
 
             var bmsState = round.Strategy is BmsJudgeModeJudgement ? GetBmsState(drawable) : null;
 
@@ -394,6 +544,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
                 EventTime = drawable.Time.Current,
                 FrameStableId = getFrameStableId(drawable),
                 BmsState = bmsState,
+                StableClassicState = GetStableClassicHoldState(drawable.HoldNote),
             });
 
             publishO2RuntimeState(round);
@@ -428,6 +579,36 @@ namespace osu.Game.Rulesets.Mania.EzMania.ReplayJudge
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// stable classic：LN 头不产生独立判定，压成 <see cref="HitResult.IgnoreHit"/> / <see cref="HitResult.IgnoreMiss"/> ——
+        /// 不计分、不计 combo、不进 acc，持有态另由 <see cref="StableClassicHoldState"/> 承担。
+        /// </summary>
+        /// <remarks>
+        /// 头绑定的是 <see cref="IgnoreJudgement"/>，落 [IgnoreMiss, IgnoreHit] 之外的结果会被计分器校验拒绝，
+        /// 故被动 Miss 也必须走本映射。
+        /// </remarks>
+        private static HitResult resolveStableClassicHeadResult(DrawableNote drawable, ManiaJudgementRound round, HitResult result)
+        {
+            if (drawable is not DrawableHoldNoteHead || !StableClassicJudgeModeJudgement.IsSelected(round.Environment.JudgeMode))
+                return result;
+
+            switch (result)
+            {
+                case HitResult.Miss:
+                    return HitResult.IgnoreMiss;
+
+                case HitResult.Perfect:
+                case HitResult.Great:
+                case HitResult.Good:
+                case HitResult.Ok:
+                case HitResult.Meh:
+                    return HitResult.IgnoreHit;
+
+                default:
+                    return result;
+            }
         }
 
         private static bool applyNoteEvaluation(

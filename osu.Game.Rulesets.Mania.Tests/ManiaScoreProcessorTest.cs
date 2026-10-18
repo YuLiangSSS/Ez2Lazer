@@ -70,5 +70,30 @@ namespace osu.Game.Rulesets.Mania.Tests
                     () => $"{result} 应使用 EZ2AC 权重表");
             }
         }
+
+        /// <summary>
+        /// [Ez] StableClassic 的基础分表：300g 与 300 都按 300 计。
+        /// 该表缺分支时每个判定基分都是 0，局内 <c>ScoreProcessor.Accuracy</c> 的分子分母同为 0，会恒判 100%。
+        /// </summary>
+        [Test]
+        public void TestStableClassicUsesStableWeights()
+        {
+            var expected = new Dictionary<HitResult, int>
+            {
+                [HitResult.Perfect] = 300,
+                [HitResult.Great] = 300,
+                [HitResult.Good] = 200,
+                [HitResult.Ok] = 100,
+                [HitResult.Meh] = 50,
+                [HitResult.Miss] = 0,
+            };
+
+            foreach (var (result, value) in expected)
+            {
+                Assert.That(JudgeModeHelper.GetBaseScoreForResult(EzEnumJudgeMode.StableClassic, result),
+                    Is.EqualTo(value),
+                    () => $"{result} 应使用 stable classic 档位权重");
+            }
+        }
     }
 }
