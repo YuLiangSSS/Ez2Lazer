@@ -36,6 +36,7 @@ namespace osu.Game.EzOsuGame
         private readonly BindableDouble columnWidth = new BindableDouble();
         private readonly BindableDouble specialFactor = new BindableDouble();
         private readonly BindableDouble noteHeightScaleToWidth = new BindableDouble();
+        private readonly Bindable<ColumnWidthStyle> columnWidthStyle = new Bindable<ColumnWidthStyle>();
 
         private readonly Bindable<string> stageName = new Bindable<string>();
         private readonly Bindable<string> noteSetName = new Bindable<string>();
@@ -88,6 +89,7 @@ namespace osu.Game.EzOsuGame
             gameThemeName.BindTo(ezConfig.GetBindable<string>(Ez2Setting.GameThemeName));
 
             ezConfig.BindWith(Ez2Setting.ColumnWidth, columnWidth);
+            ezConfig.BindWith(Ez2Setting.ColumnWidthStyle, columnWidthStyle);
             ezConfig.BindWith(Ez2Setting.SpecialFactor, specialFactor);
             ezConfig.BindWith(Ez2Setting.NoteHeightScaleToWidth, noteHeightScaleToWidth);
 
@@ -158,6 +160,7 @@ namespace osu.Game.EzOsuGame
             columnWidth.BindValueChanged(_ => scheduleTextureRefresh());
             specialFactor.BindValueChanged(_ => scheduleTextureRefresh());
             noteHeightScaleToWidth.BindValueChanged(_ => scheduleTextureRefresh());
+            columnWidthStyle.BindValueChanged(_ => scheduleTextureRefresh());
         }
 
         private void initializeColourEvents()
@@ -245,6 +248,11 @@ namespace osu.Game.EzOsuGame
             bool isSpecialColumn = !cacheKey.NoSpecial && ezConfig.IsSpecialColumnFast(cacheKey.KeyMode, cacheKey.ColumnIndex);
             float ratio = GetRatio();
             float x = (float)(columnWidth.Value * (isSpecialColumn ? specialFactor.Value : 1.0));
+
+            // 列宽风格可能改写实际列宽（全局总宽度按 10 / keyMode 摊到每列）。note 高度由宽度推导，
+            // 不跟着换算就会在风格切换后压扁。
+            x *= ezConfig.GetColumnWidthStyleScale(cacheKey.KeyMode);
+
             float y = (float)noteHeightScaleToWidth.Value * ratio * x;
             return new Vector2(x, y);
         }
@@ -375,7 +383,15 @@ namespace osu.Game.EzOsuGame
         /// 构造舞台板。<paramref name="keyState"/> 为每列的按下状态，用于驱动按键贴图。
         /// </summary>
         public Container CreateStage(int columnCount, EzStageKeyState? keyState)
+            => CreateStage(columnCount, keyState, out _);
+
+        /// <summary>
+        /// 构造舞台板，并给出按键层供调用方按列宽调整尺寸（layout 声明了 <c>keysColumnWidth</c> 时）。
+        /// </summary>
+        public Container CreateStage(int columnCount, EzStageKeyState? keyState, out EzStageKeyLayer? keyLayer)
         {
+            keyLayer = null;
+
             // 舞台板的 (0, 0) 是判定线：EzStageAnchorContainer 保持零尺寸，子项沿用 layout 的绝对坐标，
             // 外层把这个原点放到游戏判定线位置再缩放，因此列宽与画布缩放都不会移动判定线。
             var container = new EzStageAnchorContainer
@@ -421,8 +437,10 @@ namespace osu.Game.EzOsuGame
                 Drawable? bright = createPlateDrawable($"{basePath}/GrooveGaugeLight", layout.Meter.Bright);
 
                 if (gauge != null || bright != null)
+                {
                     place(applyRotation(new EzStageGrooveMeter(layout.Meter, gauge, bright), layout.Meter),
-                          layout.Meter.Order ?? EzStagePlateLayout.ORDER_METER);
+                        layout.Meter.Order ?? EzStagePlateLayout.ORDER_METER);
+                }
             }
 
             place(addPlateSprite(layout.OverObject, plateTexturePath(basePath, layout.OverObject, $"{stageName.Value}_OverObject/{stageName.Value}_OverObject")),
@@ -442,7 +460,8 @@ namespace osu.Game.EzOsuGame
             place(createPlateCounter(layout.Score, EzStagePlateCounter.Source.Score), layout.Score?.Order ?? EzStagePlateLayout.ORDER_DIGITS);
             place(createPlateCounter(layout.Combo, EzStagePlateCounter.Source.MaxCombo), layout.Combo?.Order ?? EzStagePlateLayout.ORDER_DIGITS);
 
-            place(mountKeys(layout, keyFolder, basePath, columnCount, keyState), keyOrder);
+            keyLayer = mountKeys(layout, keyFolder, basePath, columnCount, keyState);
+            place(keyLayer, keyOrder);
 
             if (layout.Character != null)
             {
@@ -500,7 +519,7 @@ namespace osu.Game.EzOsuGame
         /// 构造按键层。位置与文件名全部来自 stage layout；该键数没有声明时整层不画，
         /// 因此缺美术的回退组合不会画到错误的位置上。
         /// </summary>
-        private Drawable? mountKeys(EzStagePlateLayout layout, string? keyFolder, string basePath, int columnCount, EzStageKeyState? keyState)
+        private EzStageKeyLayer? mountKeys(EzStagePlateLayout layout, string? keyFolder, string basePath, int columnCount, EzStageKeyState? keyState)
         {
             IReadOnlyList<EzStagePlateKey>? keys = layout.GetKeys(columnCount);
 
@@ -522,7 +541,7 @@ namespace osu.Game.EzOsuGame
                 pressed.Add(keyState?.GetPressed(i));
             }
 
-            return new EzStageKeyLayer(bases, presses, pressed);
+            return new EzStageKeyLayer(bases, presses, pressed, layout.UsesColumnWidth(columnCount));
         }
 
         // 文件名由 layout 给出，且只是前缀：帧序号不在数据里，按前缀把该列所有帧一起取出来。
@@ -683,7 +702,7 @@ namespace osu.Game.EzOsuGame
                 ? EzStagePlacement.GetJudgementLineOffset(bodySize.Y, piece.Ratio)
                 : 0;
 
-            // 舞台自带优先，缺失时用 EzResources/JudgementLine 里选中的那张；两者都没有就不画。
+            // 下拉选中的图优先；留空时才退回舞台 layout 声明的判定线；两者都没有就不画。
             List<Texture> frames = loadStageJudgementFrames(piece, basePath);
 
             if (frames.Count == 0)
@@ -728,10 +747,30 @@ namespace osu.Game.EzOsuGame
         }
 
         /// <summary>
-        /// 判定线帧：舞台目录里声明的那张优先，其次 <c>EzResources/JudgementLine</c> 当前选中的那张。
+        /// 判定线帧：<c>EzResources/JudgementLine</c> 当前选中的那张优先，留空时才用舞台目录里声明的图。
         /// </summary>
         private List<Texture> loadStageJudgementFrames(EzStagePlateJudgementLine? piece, string basePath)
         {
+            string name = judgementLineName.Value?.Trim() ?? string.Empty;
+
+            if (name.Length > 0)
+            {
+                if (name.StartsWith(EzResourceDiscovery.judgement_line_prefix, StringComparison.OrdinalIgnoreCase))
+                    name = name[EzResourceDiscovery.judgement_line_prefix.Length..];
+
+                if (name.Length > 0)
+                {
+                    List<Texture> overrideFrames = loadStageComponentFrames($"JudgementLine/{EzResourceDiscovery.judgement_line_prefix}{name}");
+
+                    // 不带前缀的 {name}.png 也接受，与资源选择列表的口径一致。
+                    if (overrideFrames.Count == 0)
+                        overrideFrames = loadStageComponentFrames($"JudgementLine/{name}");
+
+                    if (overrideFrames.Count > 0)
+                        return overrideFrames;
+                }
+            }
+
             string? stagePath = piece?.Path?.Trim().Trim('/');
 
             if (!string.IsNullOrEmpty(stagePath))
@@ -739,29 +778,7 @@ namespace osu.Game.EzOsuGame
             else if (piece != null)
                 stagePath = $"{basePath}/JudgementLine";
 
-            if (stagePath != null)
-            {
-                List<Texture> stageFrames = loadStageComponentFrames(stagePath);
-
-                if (stageFrames.Count > 0)
-                    return stageFrames;
-            }
-
-            string name = judgementLineName.Value?.Trim() ?? string.Empty;
-
-            if (name.Length == 0)
-                return new List<Texture>();
-
-            if (name.StartsWith(EzResourceDiscovery.judgement_line_prefix, StringComparison.OrdinalIgnoreCase))
-                name = name[EzResourceDiscovery.judgement_line_prefix.Length..];
-
-            if (name.Length == 0)
-                return new List<Texture>();
-
-            List<Texture> frames = loadStageComponentFrames($"JudgementLine/{EzResourceDiscovery.judgement_line_prefix}{name}");
-
-            // 不带前缀的 {name}.png 也接受，与资源选择列表的口径一致。
-            return frames.Count > 0 ? frames : loadStageComponentFrames($"JudgementLine/{name}");
+            return stagePath != null ? loadStageComponentFrames(stagePath) : new List<Texture>();
         }
 
         private EzStagePlateLayout? getPlateLayout()
