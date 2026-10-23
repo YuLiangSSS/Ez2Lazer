@@ -35,7 +35,7 @@ namespace osu.Game.Screens.Select
 
         private double timeSinceUnpool;
 
-        private Bindable<bool> acrylicUiEnabled = null!;
+        private Bindable<EzMaterialUiMode> materialUiMode = null!;
         private Bindable<float> coverDim = null!;
         private Box gradientBackground = null!;
         private FillFlowContainer darkOverlays = null!;
@@ -98,7 +98,7 @@ namespace osu.Game.Screens.Select
         [BackgroundDependencyLoader]
         private void load(OverlayColourProvider colourProvider, Ez2ConfigManager ezConfig)
         {
-            acrylicUiEnabled = ezConfig.GetBindable<bool>(Ez2Setting.AcrylicUiEnabled);
+            materialUiMode = ezConfig.GetBindable<EzMaterialUiMode>(Ez2Setting.MaterialUiMode);
             coverDim = ezConfig.GetBindable<float>(Ez2Setting.SongSelectCoverDim);
 
             InternalChildren = new Drawable[]
@@ -153,17 +153,17 @@ namespace osu.Game.Screens.Select
             };
 
             // Glass N is on Panel parent; hide classic layers when acrylic is on.
-            EzMaterialOverlayAlpha.BindHiddenWhenAcrylic(gradientBackground, acrylicUiEnabled);
-            EzMaterialOverlayAlpha.BindHiddenWhenAcrylic(darkOverlays, acrylicUiEnabled);
+            EzMaterialOverlayAlpha.BindHiddenWhenAcrylic(gradientBackground, materialUiMode);
+            EzMaterialOverlayAlpha.BindHiddenWhenAcrylic(darkOverlays, materialUiMode);
         }
 
         protected override void LoadComplete()
         {
             base.LoadComplete();
 
-            acrylicUiEnabled.BindValueChanged(e =>
+            materialUiMode.BindValueChanged(e =>
             {
-                if (e.NewValue)
+                if (EzMaterialOverlayAlpha.IsEnabled(e.NewValue))
                 {
                     // Penetrate to the global song-select background — drop panel cover art.
                     loadCancellation?.Cancel();
@@ -187,14 +187,14 @@ namespace osu.Game.Screens.Select
 
         /// <summary>
         /// 按 Ez 设置「选歌界面传送带封面暗度」压暗卡片封面。
-        /// 毛玻璃 UI 下卡片不绘制封面（见 <see cref="loadContentIfRequired"/>），压暗层一并隐藏。
+        /// 穿透材质开启时卡片不绘制封面（见 <see cref="loadContentIfRequired"/>），压暗层一并隐藏。
         /// </summary>
-        private void updateCoverDim() => coverDimLayer.Alpha = acrylicUiEnabled.Value ? 0f : coverDim.Value;
+        private void updateCoverDim() => coverDimLayer.Alpha = EzMaterialOverlayAlpha.IsEnabled(materialUiMode.Value) ? 0f : coverDim.Value;
 
         private void loadContentIfRequired()
         {
             // Acrylic UI: skip panel cover textures and let the backdrop blur sample the global background.
-            if (acrylicUiEnabled.Value)
+            if (EzMaterialOverlayAlpha.IsEnabled(materialUiMode.Value))
                 return;
 
             // A load is already in progress if the cancellation token is non-null.
@@ -232,7 +232,7 @@ namespace osu.Game.Screens.Select
                 FillMode = FillMode.Fill,
             }, s =>
             {
-                if (acrylicUiEnabled.Value)
+                if (EzMaterialOverlayAlpha.IsEnabled(materialUiMode.Value))
                 {
                     s.Expire();
                     return;

@@ -183,7 +183,7 @@ namespace osu.Game.Screens.Select
         private readonly RealmPopulatingOnlineLookupSource onlineLookupSource = new RealmPopulatingOnlineLookupSource();
 
         private Bindable<bool> configBackgroundBlur = null!;
-        private Bindable<bool> acrylicUiEnabled = null!;
+        private Bindable<EzMaterialUiMode> materialUiMode = null!;
         private Bindable<bool> useEzBackground = null!;
         private Bindable<bool> showConvertedBeatmaps = null!;
 
@@ -377,10 +377,10 @@ namespace osu.Game.Screens.Select
 
             LoadComponent(modSelectOverlay = CreateModSelectOverlay());
 
-            EzMaterialOverlayAlpha.BindHiddenWhenAcrylic(rightGradientBackground, ezConfig.GetBindable<bool>(Ez2Setting.AcrylicUiEnabled));
+            EzMaterialOverlayAlpha.BindHiddenWhenAcrylic(rightGradientBackground, ezConfig.GetBindable<EzMaterialUiMode>(Ez2Setting.MaterialUiMode));
 
-            acrylicUiEnabled = ezConfig.GetBindable<bool>(Ez2Setting.AcrylicUiEnabled);
-            acrylicUiEnabled.BindValueChanged(_ =>
+            materialUiMode = ezConfig.GetBindable<EzMaterialUiMode>(Ez2Setting.MaterialUiMode);
+            materialUiMode.BindValueChanged(_ =>
             {
                 if (!this.IsCurrentScreen())
                     return;
@@ -1175,8 +1175,8 @@ namespace osu.Game.Screens.Select
             {
                 backgroundModeBeatmap.Beatmap = Beatmap.Value;
 
-                // [Ez] 选歌界面的暗度由 Ez 设置「选歌界面背景暗度」独占控制，毛玻璃 UI 开/关走同一条路径，
-                // 不再像以前那样在毛玻璃开启时借用游玩中的 DimLevel / BlurLevel。
+                // [Ez] 选歌界面的暗度由 Ez 设置「选歌界面背景暗度」独占控制，穿透材质（默认 / 亚克力 / 液态玻璃）
+                // 任一档位都走同一条路径，不再像以前那样在材质开启时借用游玩中的 DimLevel / BlurLevel。
                 backgroundModeBeatmap.IgnoreUserSettings.Value = true;
                 backgroundModeBeatmap.DimWhenUserSettingsIgnored.Value = songSelectBackgroundDim.Value;
 

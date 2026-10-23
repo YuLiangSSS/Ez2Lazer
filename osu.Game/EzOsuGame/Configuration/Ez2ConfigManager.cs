@@ -137,8 +137,15 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.QuickRotationCandidateCount, 5, 3, 6);
 
             SetDefault(Ez2Setting.StoryboardAutoVideoSize, false);
-            SetDefault(Ez2Setting.AcrylicUiEnabled, false);
-            SetDefault(Ez2Setting.AcrylicUiBlurStrength, 16.0, 0.0, 40.0, 1.0);
+            SetDefault(Ez2Setting.MaterialUiMode, EzMaterialUiMode.LiquidGlass);
+            SetDefault(Ez2Setting.MaterialUiBlur, 4.0, 0.0, 40.0, 1.0);
+            SetDefault(Ez2Setting.MaterialGlassRefractionDepth, 20.0, 0.0, 60.0, 1.0);
+            SetDefault(Ez2Setting.MaterialGlassRefractionStrength, 10.0, 0.0, 24.0, 0.5);
+            SetDefault(Ez2Setting.MaterialGlassChromatic, 0.3, 0.0, 1.0, 0.01);
+            SetDefault(Ez2Setting.MaterialGlassEdgeHighlight, 0.2, 0.0, 1.0, 0.01);
+            SetDefault(Ez2Setting.MaterialGlassInnerShadow, 0.2, 0.0, 1.0, 0.01);
+            SetDefault(Ez2Setting.MaterialGlassTintStrength, 0.2, 0.0, 1.0, 0.01);
+            SetDefault(Ez2Setting.MaterialGlassEdgeSaturation, 0.35, 0.0, 1.0, 0.01);
 
             // 选歌界面背景暗度：默认沿用官方固定值 0.1，不改变开箱观感。
             SetDefault(Ez2Setting.SongSelectBackgroundDim, 0.1f, 0f, 1f, 0.01f);
@@ -1130,18 +1137,57 @@ namespace osu.Game.EzOsuGame.Configuration
         QuickRotationCandidateCount,
 
         StoryboardAutoVideoSize,
-        AcrylicUiEnabled,
-        AcrylicUiBlurStrength,
+
+        /// <summary>
+        /// 穿透容器的材质：关闭 / 毛玻璃 / 液态玻璃。
+        /// </summary>
+        MaterialUiMode,
+        MaterialUiBlur,
+
+        /// <summary>
+        /// 液态玻璃边缘折射带宽度（屏幕像素）。越小越像薄玻璃，过渡越硬。
+        /// </summary>
+        MaterialGlassRefractionDepth,
+
+        /// <summary>
+        /// 液态玻璃边缘折射的最大位移（屏幕像素）。
+        /// </summary>
+        MaterialGlassRefractionStrength,
+
+        /// <summary>
+        /// 液态玻璃 R/G/B 三通道折射位移差，产生色散。
+        /// </summary>
+        MaterialGlassChromatic,
+
+        /// <summary>
+        /// 液态玻璃朝光侧边缘高光强度。
+        /// </summary>
+        MaterialGlassEdgeHighlight,
+
+        /// <summary>
+        /// 液态玻璃背光侧内阴影强度。
+        /// </summary>
+        MaterialGlassInnerShadow,
+
+        /// <summary>
+        /// 液态玻璃染色混合权重。
+        /// </summary>
+        MaterialGlassTintStrength,
+
+        /// <summary>
+        /// 液态玻璃边缘带饱和度提升量，制造厚玻璃的体积感。
+        /// </summary>
+        MaterialGlassEdgeSaturation,
 
         /// <summary>
         /// 选歌界面谱面背景图的暗度（0 = 不压暗，1 = 全黑）。独立于游玩中的「背景暗度」
-        /// （<see cref="OsuSetting.DimLevel"/>），毛玻璃 UI 开/关都使用本值。
+        /// （<see cref="OsuSetting.DimLevel"/>），穿透材质任一档位都使用本值。
         /// </summary>
         SongSelectBackgroundDim,
 
         /// <summary>
         /// 选歌界面右侧谱面传送带卡片封面的额外压暗量（0 = 保持官方观感，1 = 全黑）。
-        /// 叠加在官方既有的明暗层之上；毛玻璃 UI 开启时卡片不绘制封面，本项不生效。
+        /// 叠加在官方既有的明暗层之上；穿透材质开启时卡片不绘制封面，本项不生效。
         /// </summary>
         SongSelectCoverDim,
 

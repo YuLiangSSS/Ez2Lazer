@@ -5,10 +5,10 @@ using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
-using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Shapes;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Material;
+using osuTK;
 
 namespace osu.Game.EzOsuGame.Screens.Menu
 {
@@ -17,14 +17,13 @@ namespace osu.Game.EzOsuGame.Screens.Menu
         public readonly Bindable<bool> ShowDecorations = new Bindable<bool>(true);
 
         private readonly Box fill;
-        private readonly AcrylicBackdropDrawable acrylic;
-
-        private EzMaterialCaptureController? capture;
+        private readonly EzMaterialContainer material;
 
         private Bindable<EzLogoBackdropStyle> style = null!;
         private Bindable<Colour4> solidColour = null!;
         private Bindable<double> blur = null!;
         private Bindable<double> opacity = null!;
+        private Bindable<EzMaterialUiMode>? globalMaterialMode;
 
         // private Colour4 appliedLinked = EzLogoBackdropSampler.DefaultColour;
 
@@ -34,11 +33,9 @@ namespace osu.Game.EzOsuGame.Screens.Menu
 
             InternalChildren = new Drawable[]
             {
-                acrylic = new AcrylicBackdropDrawable
+                material = new EzMaterialContainer
                 {
-                    RelativeSizeAxes = Axes.Both,
                     Depth = 1,
-                    EffectEnabled = false,
                 },
                 fill = new Box
                 {
@@ -49,10 +46,8 @@ namespace osu.Game.EzOsuGame.Screens.Menu
         }
 
         [BackgroundDependencyLoader(true)]
-        private void load(Ez2ConfigManager? ezConfig, IMaterialCaptureRegistrar? registrar, EzLogoBackdropSampler? backdropSampler, IRenderer renderer)
+        private void load(Ez2ConfigManager? ezConfig, EzLogoBackdropSampler? backdropSampler)
         {
-            capture = new EzMaterialCaptureController(registrar, acrylic, renderer);
-
             if (ezConfig == null)
                 return;
 
@@ -60,6 +55,7 @@ namespace osu.Game.EzOsuGame.Screens.Menu
             solidColour = ezConfig.GetBindable<Colour4>(Ez2Setting.MenuLogoBackdropColour);
             blur = ezConfig.GetBindable<double>(Ez2Setting.MenuLogoBackdropBlur);
             opacity = ezConfig.GetBindable<double>(Ez2Setting.MenuLogoBackdropOpacity);
+            globalMaterialMode = ezConfig.GetBindable<EzMaterialUiMode>(Ez2Setting.MaterialUiMode);
         }
 
         protected override void LoadComplete()
@@ -70,6 +66,7 @@ namespace osu.Game.EzOsuGame.Screens.Menu
             solidColour.BindValueChanged(_ => apply());
             blur.BindValueChanged(_ => apply());
             opacity.BindValueChanged(_ => apply());
+            globalMaterialMode?.BindValueChanged(_ => apply());
         }
 
         // protected override void Update()
@@ -86,27 +83,65 @@ namespace osu.Game.EzOsuGame.Screens.Menu
         //     applyLinkedFill();
         // }
 
+        protected override void Update()
+        {
+            base.Update();
+
+            updateMaterialVisibility();
+        }
+
         private void apply()
         {
-            bool acrylicOn = style.Value == EzLogoBackdropStyle.Acrylic;
+            // 亚克力风格是 logo 自己的设置。全局材质为默认（不干预）时据此保持亚克力，
+            // 全局为亚克力/液态玻璃时由全局覆盖。单色与透明风格不涉及材质。
+            material.OwnMode = EzMaterialUiMode.Acrylic;
+            material.BlurSigma = new Vector2((float)blur.Value);
 
-            capture?.Sync(acrylicOn, (float)blur.Value);
-            ShowDecorations.Value = style.Value == EzLogoBackdropStyle.Solid;
+            bool solidLook = style.Value == EzLogoBackdropStyle.Solid;
+            ShowDecorations.Value = solidLook;
 
-            switch (style.Value)
+            if (solidLook)
             {
-                case EzLogoBackdropStyle.Solid:
-                    fill.Colour = solidColour.Value;
-                    fill.Alpha = 1;
-                    break;
+                fill.Colour = solidColour.Value;
+                fill.Alpha = 1;
+            }
+            else
+            {
+                fill.Alpha = 0;
+            }
 
-                // case EzLogoBackdropStyle.Linked:
-                //     applyLinkedFill();
-                //     break;
+            updateMaterialVisibility();
+        }
 
-                default:
-                    fill.Alpha = 0;
-                    break;
+        /// <summary>
+        /// 亚克力风格要申请整屏捕获。logo 是全局缓存的单实例，离开主菜单只是淡出而非移除，
+        /// 因此必须按实际可见性释放捕获；否则进过一次主菜单后，后续所有界面
+        /// （包括 gameplay 的 note 与数字）都会一直留在离屏缓冲里被重采样。
+        /// </summary>
+        private void updateMaterialVisibility()
+        {
+            bool visible = style != null
+                           && style.Value == EzLogoBackdropStyle.Acrylic
+                           && isEffectivelyVisible;
+
+            if (material.MaterialVisible == visible)
+                return;
+
+            material.MaterialVisible = visible;
+            material.SyncMaterialCaptureState();
+        }
+
+        private bool isEffectivelyVisible
+        {
+            get
+            {
+                for (Drawable? d = this; d != null; d = d.Parent)
+                {
+                    if (!d.IsPresent || d.Alpha <= 0)
+                        return false;
+                }
+
+                return true;
             }
         }
 
@@ -117,13 +152,5 @@ namespace osu.Game.EzOsuGame.Screens.Menu
         //     fill.Colour = colour;
         //     fill.Alpha = (float)opacity.Value;
         // }
-
-        protected override void Dispose(bool isDisposing)
-        {
-            if (isDisposing)
-                capture?.Dispose();
-
-            base.Dispose(isDisposing);
-        }
     }
 }
