@@ -16,18 +16,16 @@ using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
+using osu.Framework.Input.Bindings;
 using osu.Framework.Logging;
 using osu.Framework.Screens;
 using osu.Framework.Threading;
-using osu.Framework.Input.Bindings;
 using osu.Game.Audio;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.Extensions;
 using osu.Game.EzOsuGame.Analysis;
-using osu.Game.Graphics.Containers;
-using osu.Game.IO.Archives;
 using osu.Game.EzOsuGame.Audio;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Mods;
@@ -37,6 +35,8 @@ using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Scoring.Bonus;
 using osu.Game.EzOsuGame.Screens.Play;
 using osu.Game.EzOsuGame.Screens.Rotation;
+using osu.Game.Graphics.Containers;
+using osu.Game.IO.Archives;
 using osu.Game.Online.API;
 using osu.Game.Overlays;
 using osu.Game.Rulesets;
@@ -283,6 +283,8 @@ namespace osu.Game.Screens.Play
             ScoreProcessor.NewJudgement += _ => ScoreProcessor.PopulateScore(Score.ScoreInfo);
             ScoreProcessor.OnResetFromReplayFrame += () => ScoreProcessor.PopulateScore(Score.ScoreInfo);
 
+            HealthProcessor.NewJudgement += _ => HealthProcessor.PopulateScore(Score.ScoreInfo);
+
             gameActive.BindValueChanged(_ => updatePauseOnFocusLostState(), true);
         }
 
@@ -339,8 +341,13 @@ namespace osu.Game.Screens.Play
                 dependencies.CacheAs(scrollingRuleset.ScrollingInfo);
 
             ScoreProcessor = ruleset.CreateScoreProcessor();
+
+            // [Ez] aspire 谱面按 stable 的规则游玩，判定档随之固定。只作用于本局的内存值，不写回配置：
+            // ApplyEzGameplayEnvironment 内部的 `??=` 会让这个强制值优先，退出对局后配置原样。
+            bool aspireBeatmap = gameplayMods.Any(m => m.Acronym == "ASP");
+
             // [Ez] 冻结当前全局游玩环境（JudgeMode 等）；必须先于 ApplyBeatmap 的全谱模拟。
-            ScoreProcessor.ApplyEzGameplayEnvironment();
+            ScoreProcessor.ApplyEzGameplayEnvironment(aspireBeatmap);
             ScoreProcessor.Mods.Value = gameplayMods;
             ScoreProcessor.ApplyBeatmap(playableBeatmap);
 
