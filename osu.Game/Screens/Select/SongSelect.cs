@@ -34,6 +34,7 @@ using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.EzOsuGame.Audio;
 using osu.Game.EzOsuGame.Configuration;
+using osu.Game.EzOsuGame.Edit;
 using osu.Game.EzOsuGame.Layout;
 using osu.Game.EzOsuGame.Mods;
 using osu.Game.EzOsuGame.Online;
@@ -1151,11 +1152,16 @@ namespace osu.Game.Screens.Select
         /// [Ez] 进入本界面时实际用的是 Ez 背景（<see cref="BackgroundScreenDefault"/>）还是谱面背景。
         /// 暗度处理按这个字段分支而不是实时读设置：只有谱面背景才有暗度 bindable，
         /// 在界面内改设置导致背景类型与设置不一致时也不会走错分支。
+        /// 未创建背景时（皮肤编辑器占用屏幕）保持 false，暗度调用落空。
         /// </summary>
         private bool usingEzBackground;
 
-        protected override BackgroundScreen CreateBackground()
+        protected override BackgroundScreen? CreateBackground()
         {
+            // While the Ez skin editor is open, keep the global (main menu) background alive.
+            if (EzSkinEditorActiveState.Active)
+                return null;
+
             usingEzBackground = useEzBackground.Value;
 
             return usingEzBackground ? new BackgroundScreenDefault() : new BackgroundScreenBeatmap(Beatmap.Value);

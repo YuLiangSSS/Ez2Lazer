@@ -168,7 +168,7 @@ namespace osu.Game
 
         private EzLayoutLayer ezLayoutLayer;
 
-        private EzLayoutEditorOverlay ezLayoutEditor;
+        private EzSkinEditorOverlay ezSkinEditor;
 
         private Container overlayContent;
 
@@ -226,6 +226,8 @@ namespace osu.Game
         protected readonly Bindable<LocalUserPlayingState> UserPlayingState = new Bindable<LocalUserPlayingState>();
 
         public OsuScreenStack ScreenStack { get; private set; }
+
+        protected override IScreen CurrentScreen => ScreenStack?.CurrentScreen;
 
         protected BackButton BackButton => screenStackFooter.BackButton;
         protected ScreenFooter ScreenFooter => screenStackFooter.Footer;
@@ -1103,7 +1105,7 @@ namespace osu.Game
 
         private void onCurrentSkinChangedForEzJson(ValueChangedEvent<Live<SkinInfo>> skin)
         {
-            if (ScreenStack.CurrentScreen is EzSkinEditorScreen)
+            if (ezSkinEditor?.State.Value == Visibility.Visible)
                 return;
 
             if (!Ez2ConfigManager.Get<bool>(Ez2Setting.EzSkinJsonAutoApplyOnSkinChange))
@@ -1313,16 +1315,17 @@ namespace osu.Game
             loadComponentSingleFile(wikiOverlay = new WikiOverlay(), overlayContent.Add, true);
             // Above screens, below logo / footer / sheared overlays (higher Depth = further back).
             loadComponentSingleFile(ezLayoutLayer = new EzLayoutLayer { Depth = 0.5f }, screenCaptureContent.Add, true);
+            // Ez 编辑器须先于官方 SkinEditor 入树，供 SkinEditorOverlay [Resolved] 注入。
+            loadComponentSingleFile(ezSkinEditor = new EzSkinEditorOverlay(ScreenContainer), overlayContent.Add, true);
             loadComponentSingleFile(skinEditor = new SkinEditorOverlay(ScreenContainer), overlayContent.Add, true);
-            loadComponentSingleFile(ezLayoutEditor = new EzLayoutEditorOverlay(ScreenContainer, ezLayoutLayer), topMostOverlayContent.Add, true);
 
             skinEditor.State.ValueChanged += state =>
             {
                 if (state.NewValue == Visibility.Visible)
-                    ezLayoutEditor.Hide();
+                    ezSkinEditor.Hide();
             };
 
-            ezLayoutEditor.State.ValueChanged += state =>
+            ezSkinEditor.State.ValueChanged += state =>
             {
                 if (state.NewValue == Visibility.Visible)
                     skinEditor.Hide();
@@ -1976,7 +1979,6 @@ namespace osu.Game
                     Toolbar.Show();
 
                 skinEditor.SetTarget(newOsuScreen);
-                ezLayoutEditor.SetTarget(newOsuScreen);
             }
         }
 
