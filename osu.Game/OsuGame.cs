@@ -1325,12 +1325,6 @@ namespace osu.Game
                     ezSkinEditor.Hide();
             };
 
-            ezSkinEditor.State.ValueChanged += state =>
-            {
-                if (state.NewValue == Visibility.Visible)
-                    skinEditor.Hide();
-            };
-
             loadComponentSingleFile(loginOverlay = new LoginOverlay
             {
                 Anchor = Anchor.TopRight,
