@@ -188,6 +188,7 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.SkinEditorHudSnapEnabled, false);
             SetDefault(Ez2Setting.SkinEditorHudSnapDistance, 20, 10, 50, 5);
             SetDefault(Ez2Setting.SkinEditorHudSnapPixelFlush, false);
+            SetDefault(Ez2Setting.SkinEditorComponentPickerX, 0.5f);
 
             SetDefault(Ez2Setting.EzAnalysisFilter, false);
             SetDefault(Ez2Setting.EzSelectCsMode, string.Empty);
@@ -1281,6 +1282,12 @@ namespace osu.Game.EzOsuGame.Configuration
         /// When enabled, snap uses rendered pixel bounds. When disabled (default), snap uses each HUD component's layout/container box.
         /// </summary>
         SkinEditorHudSnapPixelFlush,
+
+        /// <summary>
+        /// Remembered horizontal position of the component picker as a fraction of its free travel
+        /// (0 = left edge, 1 = right edge). Resolution-independent so it survives window resizes.
+        /// </summary>
+        SkinEditorComponentPickerX,
 
         EzAnalysisFilter,
 
