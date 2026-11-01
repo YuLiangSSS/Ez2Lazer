@@ -554,7 +554,7 @@ namespace osu.Game.Overlays
                               && subsectionNavSection != null
                               && ReferenceEquals(section, subsectionNavSection)
                               && subsections != null
-                              // && subsections.Count > 3 // 统一固定显示，交互体验更一致
+                              && subsections.Count > 0 // 统一固定显示，交互体验更一致
                               && !subsectionNavSuppressed
                               && !searchActive;
 

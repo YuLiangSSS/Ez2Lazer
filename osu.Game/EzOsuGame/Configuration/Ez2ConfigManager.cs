@@ -108,7 +108,7 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.MenuLogoVisualisationStyle, EzLogoVisualisationStyle.RadialBars);
             SetDefault(Ez2Setting.MenuLogoBackdropStyle, EzLogoBackdropStyle.Acrylic);
             SetDefault(Ez2Setting.MenuLogoBackdropColour, Colour4.FromHex("ff66ab"));
-            SetDefault(Ez2Setting.MenuLogoBackdropBlur, 16.0, 0.0, 40.0, 1.0);
+            SetDefault(Ez2Setting.MenuLogoBackdropBlur, 10.0, 0.0, 40.0, 1.0);
             SetDefault(Ez2Setting.MenuLogoBackdropOpacity, 1.0, 0.0, 1.0, 0.01);
             SetDefault(Ez2Setting.SongSelectUseEzBackground, false);
             SetDefault(Ez2Setting.NotificationBehaviour, EzNotificationBehaviour.Normal);
@@ -307,6 +307,7 @@ namespace osu.Game.EzOsuGame.Configuration
 
             #region 实验性功能
 
+            SetDefault(Ez2Setting.GcMode, EzGcMode.Server);
             SetDefault(Ez2Setting.InputAudioLatencyTracker, false);
             SetDefault(Ez2Setting.ExperimentalLocalAccount, false);
 
@@ -1442,6 +1443,12 @@ namespace osu.Game.EzOsuGame.Configuration
         InputAudioLatencyTracker,
         ExperimentalLocalAccount,
 
+        /// <summary>
+        /// GC 模式（<see cref="EzGcMode"/>）。仅在进程启动时生效，改动需重启客户端。
+        /// 启动引导见 <c>osu.Desktop/EzGcModeBootstrap</c>：读取本项并通过环境变量重入进程。
+        /// </summary>
+        GcMode,
+
         // 判定时序诊断与校正
         EzJudgmentDiagEnabled,
         EzSubFrameCorrectionEnabled,
@@ -1471,6 +1478,18 @@ namespace osu.Game.EzOsuGame.Configuration
         S,
         E,
         P
+    }
+
+    /// <summary>
+    /// GC 形态（进程启动期确定，改动需重启）。见 <c>osu.Desktop/EzGcModeBootstrap</c>。
+    /// </summary>
+    public enum EzGcMode
+    {
+        /// <summary>Server GC：每核一堆、后台回收。启动期高分配下的回收暂停更短，内存占用更高。</summary>
+        Server,
+
+        /// <summary>Workstation GC：单堆。内存占用更低，但高分配时 gen0/gen1 回收会暂停主线程。</summary>
+        Workstation,
     }
 
     public static class EzConstants
