@@ -63,6 +63,7 @@ using osu.Game.Screens.Menu;
 using osu.Game.Screens.Play;
 using osu.Game.Screens.Ranking;
 using osu.Game.Skinning;
+using osu.Game.Storyboards;
 using osu.Game.Utils;
 using osuTK.Graphics;
 using osuTK.Input;
@@ -688,7 +689,11 @@ namespace osu.Game.Screens.Select
 
         private void ensureTrackLooping(IWorkingBeatmap beatmap, TrackChangeDirection changeDirection)
         {
-            if (!ezPreviewManager.StartPreview(beatmap) && keySoundPreview.Value == 0)
+            // 主 BGM 在 storyboard 里的谱面，预览开关关了也得让 storyboard 把音乐播出来。
+            // BMS 用自己的 BmsChartPreviewPlayer（ControlGlobalMusic=false），那条路本来就无条件播，不走这里。
+            bool storyboardCarriesMusic = ControlGlobalMusic && StoryboardSampleInfoExtensions.CarriesBackgroundMusicIn(beatmap);
+
+            if (!ezPreviewManager.StartPreview(beatmap, ignoreEnabled: storyboardCarriesMusic) && keySoundPreview.Value == 0)
             {
                 ezPreviewManager.StopPreview();
             }
@@ -722,6 +727,8 @@ namespace osu.Game.Screens.Select
 
             if (Beatmap.IsDefault)
                 return;
+
+            onEzGameplayStart();
 
             startAction();
         }
@@ -1253,6 +1260,8 @@ namespace osu.Game.Screens.Select
         private partial double? onEzGetFilterScheduleDelay(bool isFirstFilter);
 
         partial void onEzCarouselItemsPresented();
+
+        partial void onEzGameplayStart();
 
         private void newItemsPresented(IEnumerable<CarouselItem> carouselItems)
         {

@@ -5,7 +5,10 @@ using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Audio;
+using osu.Framework.Audio.Sample;
 using osu.Framework.Bindables;
+using osu.Game.Audio;
+using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.UI;
@@ -38,9 +41,15 @@ namespace osu.Game.Storyboards.Drawables
         private OsuConfigManager? config { get; set; }
 
         [Resolved(canBeNull: true)]
+        private AudioManager? audioManager { get; set; }
+
+        [Resolved(canBeNull: true)]
+        private IBindable<WorkingBeatmap>? beatmap { get; set; }
+
+        [Resolved(canBeNull: true)]
         private DrawableRuleset? drawableRuleset { get; set; }
 
-        private Bindable<double>? hitsoundVolume;
+        private Bindable<double>? boundVolume;
         private IAdjustableAudioComponent? hitsoundChain;
 
         /// <summary>
@@ -48,10 +57,20 @@ namespace osu.Game.Storyboards.Drawables
         /// </summary>
         /// <remarks>
         /// In rulesets whose notes are themselves audio (mania, BMS) a storyboard sample sits on the same timeline the
-        /// notes do, so it is note audio and follows the hitsound volume. Elsewhere the sample is plain background
-        /// sound, which takes the game-wide sample volume.
+        /// notes do, which is the only signal available to tell it apart from a storyboard that merely carries
+        /// background sound on these rulesets: both arrive as plain <see cref="StoryboardSampleInfo"/>.
         /// </remarks>
         protected virtual bool CountsAsNoteAudio => StoryboardSampleInfoExtensions.IsNoteAudioIn(drawableRuleset?.Ruleset.RulesetInfo);
+
+        /// <summary>
+        /// Whether this sample is the beatmap's background music, played from the storyboard because the beatmap has
+        /// no audio track of its own.
+        /// </summary>
+        /// <remarks>
+        /// Background music is not note audio, so it must not follow the hitsound volume even on the rulesets whose
+        /// storyboard samples otherwise do.
+        /// </remarks>
+        protected virtual bool CarriesBackgroundMusic => beatmap != null && StoryboardSampleInfoExtensions.CarriesBackgroundMusicIn(beatmap.Value);
 
         /// <summary>
         /// The audio component whose volume chain a hitsound-classified sample plays under, or <see langword="null"/>
@@ -67,15 +86,63 @@ namespace osu.Game.Storyboards.Drawables
 
         protected override void LoadAsyncComplete()
         {
+            bool noteAudio = CountsAsNoteAudio && !CarriesBackgroundMusic;
+            bool backgroundMusic = CarriesBackgroundMusic && !sampleInfo.IsHitsound;
+
+            // Note audio and storyboard-carried background music both resolve through the hitsound store: that store
+            // carries neither the game-wide effect volume nor the music volume, so each of them only needs its own
+            // slider applied here. The regular store already carries the music volume, and binding it on top of that
+            // would apply it twice.
+            if ((noteAudio || backgroundMusic) && !sampleInfo.IsHitsound)
+                Samples = new ISampleInfo[] { new HitsoundClassifiedSampleInfo(sampleInfo) };
+
+            backgroundMusicPlaying = backgroundMusic;
+
             base.LoadAsyncComplete();
 
-            if (sampleInfo.IsHitsound || CountsAsNoteAudio)
+            if (noteAudio || sampleInfo.IsHitsound)
             {
                 if (HitsoundVolumeChain is { } chain)
                     BindAdjustments(hitsoundChain = chain);
                 else if (config != null)
-                    Volume.BindTo(hitsoundVolume = config.GetBindable<double>(OsuSetting.HitsoundVolume));
+                    Volume.BindTo(boundVolume = config.GetBindable<double>(OsuSetting.HitsoundVolume));
             }
+            else if (backgroundMusic && audioManager != null)
+            {
+                Volume.BindTo(boundVolume = audioManager.VolumeTrack);
+            }
+        }
+
+        public override void Play()
+        {
+            if (!backgroundMusicPlaying)
+            {
+                base.Play();
+                return;
+            }
+
+            RequestedPlaying = true;
+
+            if (SamplePlaybackDisabled)
+                return;
+
+            if (BackgroundMusicChannel == null)
+                playBackgroundMusic();
+            else
+                pauseFrequency!.Value = 1;
+        }
+
+        public override void Stop()
+        {
+            if (!backgroundMusicPlaying)
+            {
+                base.Stop();
+                return;
+            }
+
+            // A full stop (as opposed to a pause) releases the channel, so a later start begins the sample afresh.
+            RequestedPlaying = false;
+            releaseBackgroundMusic();
         }
 
         protected override void SkinChanged(ISkinSource skin)
@@ -90,10 +157,32 @@ namespace osu.Game.Storyboards.Drawables
                         mod.ApplyToSample(sample);
                 }
             }
+
+            if (backgroundMusicPlaying)
+            {
+                // The samples were rebuilt, so the channel taken from the previous ones is stale. Re-acquire one, and
+                // keep playing: a skin change should not silence the beatmap's music.
+                bool wasPlaying = RequestedPlaying;
+                releaseBackgroundMusic();
+
+                if (wasPlaying)
+                    playBackgroundMusic();
+            }
         }
 
         protected override void SamplePlaybackDisabledChanged(ValueChangedEvent<bool> disabled)
         {
+            if (backgroundMusicPlaying)
+            {
+                // A sample the length of a track is suspended rather than released, so that resuming playback continues
+                // from where it was paused. Driving the channel frequency to zero is what the framework translates into
+                // a pause that keeps the playback position; releasing the channel would discard it instead.
+                if (BackgroundMusicChannel is { IsDisposed: false })
+                    pauseFrequency!.Value = disabled.NewValue ? 0 : 1;
+
+                return;
+            }
+
             if (!RequestedPlaying) return;
 
             if (!Looping && disabled.NewValue)
@@ -105,6 +194,76 @@ namespace osu.Game.Storyboards.Drawables
             }
 
             base.SamplePlaybackDisabledChanged(disabled);
+        }
+
+        /// <summary>
+        /// Whether playback is driven by this class rather than by <see cref="SkinnableSound"/>.
+        /// </summary>
+        private bool backgroundMusicPlaying;
+
+        /// <summary>
+        /// Held at zero to suspend the music, and at one otherwise.
+        /// </summary>
+        /// <remarks>
+        /// The channel frequency is the only knob that suspends playback while keeping the position: zero is translated
+        /// by the framework into a channel pause, and back into a resume when returned to a non-zero value.
+        /// </remarks>
+        private BindableNumber<double>? pauseFrequency;
+
+        /// <summary>
+        /// The channel the background music is held on, or <see langword="null"/> when not started.
+        /// </summary>
+        /// <remarks>
+        /// Exposed for tests: the same channel across a pause is what proves playback resumed where it stopped
+        /// instead of being restarted from the beginning.
+        /// </remarks>
+        internal SampleChannel? BackgroundMusicChannel { get; private set; }
+
+        /// <summary>
+        /// Whether the background music is suspended by pause handling while keeping its playback position.
+        /// </summary>
+        internal bool IsBackgroundMusicSuspended => backgroundMusicPlaying && BackgroundMusicChannel is { IsDisposed: false } && BackgroundMusicChannel.AggregateFrequency.Value == 0;
+
+        /// <remarks>
+        /// Playback is driven here instead of through <see cref="SkinnableSound"/> because a sample the length of a
+        /// track must keep the channel it started on: the base implementation hands out a fresh channel on every call
+        /// and discards the one it had, so neither a resume nor a suspension can be performed on the playback.
+        /// </remarks>
+        private void playBackgroundMusic()
+        {
+            FlushPendingSkinChanges();
+
+            var dSample = DrawableSamples.FirstOrDefault();
+
+            if (dSample == null)
+                return;
+
+            BackgroundMusicChannel = dSample.GetChannel();
+
+            // The channel inherits the volume and the mod-applied playback rate through the sample it was taken from,
+            // so only the pause switch is added here.
+            pauseFrequency = new BindableNumber<double>(1);
+            BackgroundMusicChannel.AddAdjustment(AdjustableProperty.Frequency, pauseFrequency);
+
+            BackgroundMusicChannel.Play();
+        }
+
+        private void releaseBackgroundMusic()
+        {
+            if (BackgroundMusicChannel == null)
+                return;
+
+            // The channel may already have been disposed by the sample it was taken from if it played to its end.
+            if (!BackgroundMusicChannel.IsDisposed)
+            {
+                if (pauseFrequency != null)
+                    BackgroundMusicChannel.RemoveAdjustment(AdjustableProperty.Frequency, pauseFrequency);
+
+                BackgroundMusicChannel.Stop();
+            }
+
+            pauseFrequency = null;
+            BackgroundMusicChannel = null;
         }
 
         protected override void Update()
@@ -143,17 +302,43 @@ namespace osu.Game.Storyboards.Drawables
         {
             if (isDisposing)
             {
-                if (hitsoundVolume != null)
-                    Volume.UnbindFrom(hitsoundVolume);
+                releaseBackgroundMusic();
+
+                if (boundVolume != null)
+                    Volume.UnbindFrom(boundVolume);
 
                 if (hitsoundChain != null)
                     UnbindAdjustments(hitsoundChain);
             }
 
-            hitsoundVolume = null;
+            boundVolume = null;
             hitsoundChain = null;
 
             base.Dispose(isDisposing);
+        }
+
+        /// <summary>
+        /// A copy of a storyboard sample marked as a hitsound, so playback resolves through the hitsound sample store.
+        /// </summary>
+        /// <remarks>
+        /// Deriving from <see cref="StoryboardSampleInfo"/> keeps the lookup itself untouched: beatmap-skin sample
+        /// gating and fallback rules key on that type, so a wrapper of any other type would silently disable them.
+        /// </remarks>
+        private sealed class HitsoundClassifiedSampleInfo : StoryboardSampleInfo
+        {
+            private readonly StoryboardSampleInfo inner;
+
+            public HitsoundClassifiedSampleInfo(StoryboardSampleInfo inner)
+                : base(inner.Source, inner.Path, inner.StartTime, inner.Volume)
+            {
+                this.inner = inner;
+            }
+
+            public override bool IsHitsound => true;
+
+            public override int Volume => inner.Volume;
+
+            public override IEnumerable<string> LookupNames => inner.LookupNames;
         }
     }
 }
