@@ -20,6 +20,7 @@ using osu.Game.EzOsuGame.Edit;
 using osu.Game.EzOsuGame.Edit.Components;
 using osu.Game.EzOsuGame.Edit.Screens;
 using osu.Game.EzOsuGame.Layout;
+using osu.Game.EzOsuGame.UserInterface;
 using osu.Game.Online.API;
 using osu.Game.Overlays.Mods;
 using osu.Game.Overlays.Settings;
@@ -60,7 +61,7 @@ namespace osu.Game.Tests.Visual.Navigation
             AddUntilStep("Ez editor overlay available", () => Game.ChildrenOfType<EzSkinEditorOverlay>().Any());
             AddStep("open Ez editor", () => ezSkinEditor.Toggle());
             AddUntilStep("editor workspace ready", () => ezSkinEditor.Workspace?.IsLoaded == true);
-            AddAssert("song select scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzSkinEditorSceneType.SongSelectHud);
+            AddAssert("song select scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzEditorSceneType.SongSelectHud);
             AddStep("close Ez editor", () => ezSkinEditor.Toggle());
             AddUntilStep("last scene screen remains current", () => Game.ScreenStack.CurrentScreen is SoloSongSelect);
             AddAssert("selected beatmap retained", () => !Game.Beatmap.IsDefault);
@@ -92,7 +93,7 @@ namespace osu.Game.Tests.Visual.Navigation
             AddStep("open Ez editor", () => ezSkinEditor.Toggle());
             AddUntilStep("editor gameplay current", () => Game.ScreenStack.CurrentScreen is Player);
 
-            AddStep("switch to song select scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzSkinEditorSceneType.SongSelectHud);
+            AddStep("switch to song select scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzEditorSceneType.SongSelectHud);
             AddUntilStep("real song select current", () => Game.ScreenStack.CurrentScreen is SoloSongSelect);
             AddUntilStep("no residual gameplay", () => Game.ScreenStack.CurrentScreen is not Player);
 
@@ -111,10 +112,10 @@ namespace osu.Game.Tests.Visual.Navigation
             AddStep("open Ez editor", () => ezSkinEditor.Toggle());
             AddUntilStep("editor gameplay current", () => Game.ScreenStack.CurrentScreen is Player);
 
-            AddStep("switch to song select scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzSkinEditorSceneType.SongSelectHud);
+            AddStep("switch to song select scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzEditorSceneType.SongSelectHud);
             AddUntilStep("real song select current", () => Game.ScreenStack.CurrentScreen is SoloSongSelect);
 
-            AddStep("switch back to gameplay scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzSkinEditorSceneType.GameplayHud);
+            AddStep("switch back to gameplay scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzEditorSceneType.GameplayHud);
             AddUntilStep("editor gameplay current again", () => Game.ScreenStack.CurrentScreen is Player);
 
             AddStep("close Ez editor", () => ezSkinEditor.Toggle());
@@ -555,7 +556,7 @@ namespace osu.Game.Tests.Visual.Navigation
             AddStep("open Ez editor", () => ezSkinEditor.Toggle());
             AddUntilStep("editor gameplay current", () => Game.ScreenStack.CurrentScreen is Player);
             AddUntilStep("editor workspace ready", () => ezSkinEditor.Workspace?.IsLoaded == true);
-            AddUntilStep("gameplay scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzSkinEditorSceneType.GameplayHud);
+            AddUntilStep("gameplay scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzEditorSceneType.GameplayHud);
 
             AddUntilStep("layer button present", () => ezSkinEditor.Workspace!.ChildrenOfType<EzEditorLayerButton>().Any());
             AddUntilStep("editor resolved a ruleset", () =>
@@ -593,7 +594,7 @@ namespace osu.Game.Tests.Visual.Navigation
         {
             advanceToSongSelect();
             openEzEditor();
-            AddUntilStep("song select scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzSkinEditorSceneType.SongSelectHud);
+            AddUntilStep("song select scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzEditorSceneType.SongSelectHud);
 
             AddUntilStep("song select container is an editing target", () =>
                 ezSkinEditor.Workspace!.ChildrenOfType<EzSkinEditorHudLayer>().Single()
@@ -616,10 +617,10 @@ namespace osu.Game.Tests.Visual.Navigation
             openEzEditor();
             AddUntilStep("editor workspace ready", () => ezSkinEditor.Workspace?.IsLoaded == true);
 
-            AddStep("switch to song select scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzSkinEditorSceneType.SongSelectHud);
+            AddStep("switch to song select scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzEditorSceneType.SongSelectHud);
             AddUntilStep("real song select current", () => Game.ScreenStack.CurrentScreen is SoloSongSelect);
 
-            AddStep("switch to beatmap preview scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzSkinEditorSceneType.BeatmapPreview);
+            AddStep("switch to beatmap preview scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzEditorSceneType.BeatmapPreview);
             AddUntilStep("full map preview screen current", () => Game.ScreenStack.CurrentScreen is EzSkinEditorPreviewManiaScreen);
             AddUntilStep("song select was exited", () => Game.ScreenStack.CurrentScreen is not SoloSongSelect);
         }
@@ -636,8 +637,8 @@ namespace osu.Game.Tests.Visual.Navigation
             openEzEditor();
             AddUntilStep("editor workspace ready", () => ezSkinEditor.Workspace?.IsLoaded == true);
 
-            AddStep("switch to beatmap preview scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzSkinEditorSceneType.BeatmapPreview);
-            AddUntilStep("scene stayed on beatmap preview", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzSkinEditorSceneType.BeatmapPreview);
+            AddStep("switch to beatmap preview scene", () => ezSkinEditor.Workspace!.CurrentScene.Value = EzEditorSceneType.BeatmapPreview);
+            AddUntilStep("scene stayed on beatmap preview", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzEditorSceneType.BeatmapPreview);
             AddUntilStep("full map preview screen current", () => Game.ScreenStack.CurrentScreen is EzSkinEditorPreviewManiaScreen);
         }
 
@@ -650,7 +651,7 @@ namespace osu.Game.Tests.Visual.Navigation
             AddUntilStep("main menu current", () => Game.ScreenStack.CurrentScreen is MainMenu);
             openEzEditor();
             AddUntilStep("editor gameplay current", () => Game.ScreenStack.CurrentScreen is Player);
-            AddUntilStep("gameplay scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzSkinEditorSceneType.GameplayHud);
+            AddUntilStep("gameplay scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzEditorSceneType.GameplayHud);
 
             AddUntilStep("global layer edits the global hud container", () =>
             {
@@ -668,7 +669,7 @@ namespace osu.Game.Tests.Visual.Navigation
             AddUntilStep("main menu current", () => Game.ScreenStack.CurrentScreen is MainMenu);
             openEzEditor();
             AddUntilStep("editor gameplay current", () => Game.ScreenStack.CurrentScreen is Player);
-            AddUntilStep("gameplay scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzSkinEditorSceneType.GameplayHud);
+            AddUntilStep("gameplay scene selected", () => ezSkinEditor.Workspace!.CurrentScene.Value == EzEditorSceneType.GameplayHud);
 
             AddUntilStep("wait for gameplay containers", () =>
                 Game.ChildrenOfType<EzLayoutLayer>().Single().LayoutContainers.Count() > 1);
@@ -719,7 +720,7 @@ namespace osu.Game.Tests.Visual.Navigation
         {
             AddStep("Click gameplay scene button", () =>
             {
-                InputManager.MoveMouseTo(skinEditor.ChildrenOfType<SkinEditorSceneLibrary.SceneButton>().First(b => b.Text.ToString() == "Gameplay"));
+                InputManager.MoveMouseTo(skinEditor.ChildrenOfType<EzSceneBarButton>().First(b => b.Text.ToString() == "Gameplay"));
                 InputManager.Click(MouseButton.Left);
             });
 

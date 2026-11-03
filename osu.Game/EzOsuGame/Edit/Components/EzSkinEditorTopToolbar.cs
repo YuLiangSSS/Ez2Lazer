@@ -6,7 +6,7 @@ using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Graphics.Containers;
-using osu.Game.EzOsuGame.Configuration;
+using osu.Game.Beatmaps;
 using osu.Game.Rulesets;
 using osuTK;
 
@@ -16,16 +16,14 @@ namespace osu.Game.EzOsuGame.Edit.Components
     {
         public Action<RulesetInfo>? BeatmapPreviewRequested { get; set; }
 
-        public Bindable<EzSkinEditorPreviewSource>? PreviewSource { get; set; }
-
-        public Bindable<EzBeatmapPreviewMode>? PreviewMode { get; set; }
+        public Bindable<IWorkingBeatmap?>? PreviewBeatmap { get; set; }
 
         public BindableBool? LoopBeatmap { get; set; }
 
         /// <summary>Preview ruleset; drives which ruleset-specific buttons are present.</summary>
         public Bindable<RulesetInfo?>? Ruleset { get; set; }
 
-        private EzSkinEditorBeatmapMenuButton beatmapButton = null!;
+        private EzEditorSwitchModeButton beatmapButton = null!;
         // private LoopBeatmapButton? loopButton;
 
         public EzSkinEditorTopToolbar()
@@ -43,7 +41,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
         {
             Children = new Drawable[]
             {
-                beatmapButton = new EzSkinEditorBeatmapMenuButton
+                beatmapButton = new EzEditorSwitchModeButton
                 {
                     Anchor = Anchor.CentreLeft,
                     Origin = Anchor.CentreLeft,
@@ -56,8 +54,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
         {
             base.LoadComplete();
 
-            PreviewSource?.BindValueChanged(_ => updateActiveState(), true);
-            PreviewMode?.BindValueChanged(_ => updateActiveState(), true);
+            PreviewBeatmap?.BindValueChanged(_ => updateActiveState(), true);
             LoopBeatmap?.BindValueChanged(_ => updateActiveState(), true);
             Ruleset?.BindValueChanged(_ => updateActiveState(), true);
         }
@@ -70,7 +67,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
                 LoopBeatmap.Value = false;
 
             bool loop = LoopBeatmap?.Value == true;
-            bool beatmapLoaded = PreviewSource?.Value == EzSkinEditorPreviewSource.Beatmap;
+            bool beatmapLoaded = PreviewBeatmap?.Value != null;
 
             beatmapButton.Active = beatmapLoaded && !loop;
 
@@ -118,7 +115,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
             ruleset is null || ruleset.OnlineID == 3;
 
         /*
-        private partial class LoopBeatmapButton : SkinEditorSceneLibrary.SceneButton
+        private partial class LoopBeatmapButton : EzSceneBarButton
         {
             public LoopBeatmapButton()
             {
