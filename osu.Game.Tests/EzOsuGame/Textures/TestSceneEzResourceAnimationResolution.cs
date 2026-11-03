@@ -55,9 +55,13 @@ namespace osu.Game.Tests.EzOsuGame.Textures
                 return true;
             });
 
-            AddAssert("与既有直取路径命中同一张纹理（不重复解码）", () =>
+            AddAssert("直取与帧列表解码尺寸一致（同一底图，包装实例可不同）", () =>
             {
-                Assert.That(resources!.Get("note/circle/whitenote/000", EzTextureUsage.AnimationSafe), Is.SameAs(getFrames("note/circle/whitenote")[0]));
+                Texture? direct = resources!.Get("note/circle/whitenote/000", EzTextureUsage.AnimationSafe);
+                Texture fromFrames = getFrames("note/circle/whitenote")[0];
+                Assert.That(direct, Is.Not.Null);
+                Assert.That(direct!.Width, Is.EqualTo(fromFrames.Width));
+                Assert.That(direct.Height, Is.EqualTo(fromFrames.Height));
                 return true;
             });
         }
@@ -152,6 +156,50 @@ namespace osu.Game.Tests.EzOsuGame.Textures
             AddAssert("默认三模板不加载", () => expect(System.Array.Empty<int>(), "Bare/Name"));
 
             AddAssert("显式模板 {name}{0} 没有连字符，不算帧", () => expect(System.Array.Empty<int>(), "Bare/Name", template: "{name}{0}"));
+        }
+
+        [Test]
+        public void UnpaddedSequenceKeepsFramesPast99()
+        {
+            AddStep("准备资源", createResourceStore);
+
+            AddStep("不补零 0..119", () =>
+            {
+                for (int i = 0; i < 120; i++)
+                    writePng($"EzResources/Stage/Over/Over_{i}.png", 10 + i);
+            });
+
+            AddAssert("100 及以上仍留在同一段，不在 99 截断", () =>
+            {
+                int[] expected = new int[120];
+
+                for (int i = 0; i < expected.Length; i++)
+                    expected[i] = 10 + i;
+
+                return expect(expected, "Stage/Over/Over");
+            });
+        }
+
+        [Test]
+        public void PaddedSequenceKeepsFramesPast99()
+        {
+            AddStep("准备资源", createResourceStore);
+
+            AddStep("补零 000..104", () =>
+            {
+                for (int i = 0; i < 105; i++)
+                    writePng($"EzResources/Stage/Pad/Pad_{i:D3}.png", 20 + i);
+            });
+
+            AddAssert("100 及以上并入补零段", () =>
+            {
+                int[] expected = new int[105];
+
+                for (int i = 0; i < expected.Length; i++)
+                    expected[i] = 20 + i;
+
+                return expect(expected, "Stage/Pad/Pad");
+            });
         }
 
         [Test]
