@@ -438,7 +438,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
             if (judgement.HitObject.HitWindows == null)
                 return;
 
-            // 未击打的 miss 默认不显示（其 TimeOffset 来自按键历史推导，未必代表真实手感）；开关打开后与命中一样按 TimeOffset 分早晚。
+            // 未击打的 miss 默认不显示；开关打开后计入显示，方向在 displayResult 中按偏晚处理。
             if (!judgement.IsHit && !ShowMiss.Value)
                 return;
 
@@ -503,6 +503,14 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
             {
                 fadeOutAllTexts();
                 updateTextsForTest(judgement);
+                return;
+            }
+
+            // 未击打的 miss 没有可靠的按键方向：被动 miss 的 TimeOffset 取「同列最近一次按键 - 物件结束时间」，
+            // 该列没有按键记录时为 0，既可能因偏早的邻键变负，也无法与按下瞬间判出的 miss 区分。统一按偏晚显示。
+            if (!judgement.IsHit)
+            {
+                showLate(judgement);
                 return;
             }
 
