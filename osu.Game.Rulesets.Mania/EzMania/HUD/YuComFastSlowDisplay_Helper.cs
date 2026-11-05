@@ -67,6 +67,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
             public static readonly LocalisableString DISPLAY_STYLE = new EzLocalizationManager.EzLocalisableString("水平/垂直", "Horizontal / Vertical");
             public static readonly LocalisableString DISPLAY_STYLE_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("水平或垂直显示文本", "Display the text horizontally or vertically.");
 
+            public static readonly LocalisableString SHOW_MISS = new EzLocalizationManager.EzLocalisableString("显示未击打", "Show Misses");
+            public static readonly LocalisableString SHOW_MISS_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("未击打的 Miss 也显示快/慢", "Also display fast/slow for notes which were not hit.");
+
             public static readonly LocalisableString LOWER_COLUMN = new EzLocalizationManager.EzLocalisableString("列下界", "Lower Column Bound");
             public static readonly LocalisableString LOWER_COLUMN_DESCRIPTION = new EzLocalizationManager.EzLocalisableString("显示文本的列下界", "The lower bound of the column to display the text.");
 

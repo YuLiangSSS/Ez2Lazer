@@ -98,6 +98,9 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
         [SettingSource(typeof(FastSlowDisplayStrings), nameof(FastSlowDisplayStrings.DISPLAY_STYLE), nameof(FastSlowDisplayStrings.DISPLAY_STYLE_DESCRIPTION))]
         public BindableBool DisplayStyle { get; } = new BindableBool(false);
 
+        [SettingSource(typeof(FastSlowDisplayStrings), nameof(FastSlowDisplayStrings.SHOW_MISS), nameof(FastSlowDisplayStrings.SHOW_MISS_DESCRIPTION))]
+        public BindableBool ShowMiss { get; } = new BindableBool(false);
+
         [SettingSource(typeof(FastSlowDisplayStrings), nameof(FastSlowDisplayStrings.LOWER_COLUMN), nameof(FastSlowDisplayStrings.LOWER_COLUMN_DESCRIPTION))]
         public BindableNumber<int> LowerColumnBound { get; } = new BindableNumber<int>(1)
         {
@@ -432,7 +435,11 @@ namespace osu.Game.Rulesets.Mania.EzMania.HUD
 
         protected override void OnNewJudgement(JudgementResult judgement)
         {
-            if (!judgement.IsHit || judgement.HitObject.HitWindows == null)
+            if (judgement.HitObject.HitWindows == null)
+                return;
+
+            // 未击打的 miss 默认不显示（其 TimeOffset 来自按键历史推导，未必代表真实手感）；开关打开后与命中一样按 TimeOffset 分早晚。
+            if (!judgement.IsHit && !ShowMiss.Value)
                 return;
 
             var hitResult = judgement.Type;
