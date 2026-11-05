@@ -19,6 +19,9 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
         [Resolved]
         protected Column Column { get; private set; } = null!;
 
+        [Resolved(CanBeNull = true)]
+        private ManiaPlayfieldNoteDisplayTint? noteDisplayTint { get; set; }
+
         [Resolved]
         private StageDefinition stage { get; set; } = null!;
 
@@ -27,6 +30,11 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
         /// </summary>
         protected string FallbackColumnIndex { get; private set; } = null!;
 
+        protected string ResolveNoteTextureFileIndex(ManiaNoteDisplayColourPart part)
+            => noteDisplayTint?.UseTintBaseTexture(part, Column) == true
+                ? "1"
+                : FallbackColumnIndex;
+
         [BackgroundDependencyLoader]
         private void load()
         {
@@ -34,11 +42,33 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
                 FallbackColumnIndex = "S";
             else
             {
-                // Account for cases like dual-stage (assume that all stages have the same column count for now).
                 int columnInStage = Column.Index % stage.Columns;
                 int distanceToEdge = Math.Min(columnInStage, (stage.Columns - 1) - columnInStage);
                 FallbackColumnIndex = distanceToEdge % 2 == 0 ? "1" : "2";
             }
+        }
+
+        protected override void LoadComplete()
+        {
+            base.LoadComplete();
+
+            if (noteDisplayTint != null)
+                noteDisplayTint.Changed += OnTintDisplaySettingsChanged;
+
+            // Subclasses (e.g. LegacyNotePiece) build children in load(); notify only after the hierarchy is ready.
+            OnTintDisplaySettingsChanged();
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            if (isDisposing && noteDisplayTint != null)
+                noteDisplayTint.Changed -= OnTintDisplaySettingsChanged;
+
+            base.Dispose(isDisposing);
+        }
+
+        protected virtual void OnTintDisplaySettingsChanged()
+        {
         }
 
         protected IBindable<T>? GetColumnSkinConfig<T>(ISkin skin, LegacyManiaSkinConfigurationLookups lookup) where T : notnull

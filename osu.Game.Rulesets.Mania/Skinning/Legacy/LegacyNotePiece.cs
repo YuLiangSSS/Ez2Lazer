@@ -8,7 +8,7 @@ using osu.Framework.Graphics.Animations;
 using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
-using osu.Game.Rulesets.Mania.Configuration;
+using osu.Game.Rulesets.Mania.UI;
 using osu.Game.Rulesets.UI.Scrolling;
 using osu.Game.Skinning;
 using osuTK;
@@ -18,8 +18,6 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
     public partial class LegacyNotePiece : LegacyManiaColumnElement
     {
         private readonly IBindable<ScrollingDirection> direction = new Bindable<ScrollingDirection>();
-        private readonly Bindable<bool> divisorNoteColouring = new Bindable<bool>();
-        private readonly Bindable<bool> colorSettingsEnabled = new Bindable<bool>();
 
         private Container directionContainer = null!;
 
@@ -27,7 +25,6 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
         private ISkinSource skin = null!;
 
         private float? widthForNoteHeightScale;
-        private string index = "1";
 
         public LegacyNotePiece()
         {
@@ -36,11 +33,9 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
         }
 
         [BackgroundDependencyLoader(true)]
-        private void load(ISkinSource skin, IScrollingInfo scrollingInfo, ManiaRulesetConfigManager? config)
+        private void load(ISkinSource skin, IScrollingInfo scrollingInfo)
         {
             this.skin = skin;
-            config?.BindWith(ManiaRulesetSetting.TimingBasedNoteColouring, divisorNoteColouring);
-            colorSettingsEnabled.BindTo(Column.ColorSettingsEnabledBindable);
 
             widthForNoteHeightScale = skin.GetConfig<ManiaSkinConfigurationLookup, float>(new ManiaSkinConfigurationLookup(LegacyManiaSkinConfigurationLookups.WidthForNoteHeightScale))?.Value;
 
@@ -51,27 +46,23 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
                 AutoSizeAxes = Axes.Y,
             };
 
-            updateNoteFileIndex();
             reloadAnimation();
+
             direction.BindTo(scrollingInfo.Direction);
             direction.BindValueChanged(OnDirectionChanged, true);
         }
 
-        protected override void LoadComplete()
+        protected override void OnTintDisplaySettingsChanged()
         {
-            base.LoadComplete();
+            reloadAnimation();
+        }
 
-            divisorNoteColouring.BindValueChanged(_ =>
-            {
-                updateNoteFileIndex();
-                reloadAnimation();
-            });
+        private void reloadAnimation()
+        {
+            if (directionContainer == null || skin == null)
+                return;
 
-            colorSettingsEnabled.BindValueChanged(_ =>
-            {
-                updateNoteFileIndex();
-                reloadAnimation();
-            });
+            directionContainer.Child = noteAnimation = GetAnimation(skin) ?? Empty();
         }
 
         protected override void Update()
@@ -108,11 +99,6 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
 
         protected virtual Drawable? GetAnimation(ISkinSource skin) => GetAnimationFromLookup(skin, LegacyManiaSkinConfigurationLookups.NoteImage);
 
-        private void reloadAnimation()
-        {
-            directionContainer.Child = noteAnimation = GetAnimation(skin) ?? Empty();
-        }
-
         protected Drawable? GetAnimationFromLookup(ISkin skin, LegacyManiaSkinConfigurationLookups lookup)
         {
             string suffix = string.Empty;
@@ -129,16 +115,16 @@ namespace osu.Game.Rulesets.Mania.Skinning.Legacy
             }
 
             string noteImage = GetColumnSkinConfig<string>(skin, lookup)?.Value
-                               ?? $"mania-note{index}{suffix}";
+                               ?? $"mania-note{ResolveNoteTextureFileIndex(partForLookup(lookup))}{suffix}";
 
             return skin.GetAnimation(noteImage, WrapMode.ClampToEdge, WrapMode.ClampToEdge, true, true);
         }
 
-        private void updateNoteFileIndex()
+        private static ManiaNoteDisplayColourPart partForLookup(LegacyManiaSkinConfigurationLookups lookup) => lookup switch
         {
-            index = ManiaNoteTextureColouring.ShouldUseTintBaseNoteTextures(colorSettingsEnabled.Value, divisorNoteColouring.Value)
-                ? "1"
-                : FallbackColumnIndex;
-        }
+            LegacyManiaSkinConfigurationLookups.HoldNoteHeadImage => ManiaNoteDisplayColourPart.HoldHead,
+            LegacyManiaSkinConfigurationLookups.HoldNoteTailImage => ManiaNoteDisplayColourPart.HoldBody,
+            _ => ManiaNoteDisplayColourPart.Note,
+        };
     }
 }

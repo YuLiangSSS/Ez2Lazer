@@ -9,10 +9,7 @@ using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Input.Bindings;
 using osu.Framework.Input.Events;
-using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
-using osu.Game.Graphics;
-using osu.Game.Rulesets.Mania.Configuration;
 using osu.Game.Rulesets.Mania.EzMania.Helper;
 using osu.Game.Rulesets.Mania.EzMania.ReplayJudge;
 using osu.Game.Rulesets.Mania.Skinning;
@@ -30,24 +27,21 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
     /// </summary>
     public partial class DrawableNote : DrawableManiaHitObject<Note>, IKeyBindingHandler<ManiaAction>
     {
-        [Resolved]
-        private OsuColour colours { get; set; }
-
-        [Resolved(canBeNull: true)]
-        private IBeatmap beatmap { get; set; }
+        [Resolved(CanBeNull = true)]
+        private ManiaPlayfieldNoteDisplayTint noteDisplayTint { get; set; }
 
         [Resolved(canBeNull: true)]
         private Column column { get; set; }
 
-        private readonly Bindable<bool> gameDivisorNoteColouring = new Bindable<bool>();
-
         protected virtual ManiaSkinComponents Component => ManiaSkinComponents.Note;
 
-        protected virtual bool SupportsImprovedNoteDisplayColour => Component == ManiaSkinComponents.Note;
+        protected virtual ManiaNoteDisplayColourPart DisplayColourPart => ManiaNoteDisplayColourPart.Note;
 
-        protected virtual bool SupportsDivisorNoteDisplayTint => true;
+        protected virtual bool UseColorization => true;
 
         private Drawable headPiece;
+
+        private bool displayColourBound;
 
         public DrawableNote()
             : this(null)
@@ -61,30 +55,51 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
         }
 
         [BackgroundDependencyLoader(true)]
-        private void load(ManiaRulesetConfigManager rulesetConfig)
+        private void load()
         {
-            rulesetConfig?.BindWith(ManiaRulesetSetting.TimingBasedNoteColouring, gameDivisorNoteColouring);
-
-            AddInternal(headPiece = new SkinnableDrawable(new ManiaSkinComponentLookup(Component), _ => new DefaultNotePiece())
+            var skinnable = new SkinnableDrawable(new ManiaSkinComponentLookup(Component), _ => new DefaultNotePiece())
             {
                 RelativeSizeAxes = Axes.X,
                 AutoSizeAxes = Axes.Y
-            });
+            };
+
+            skinnable.OnSkinChanged += updateSnapColour;
+            AddInternal(headPiece = skinnable);
         }
 
         protected override void LoadComplete()
         {
             base.LoadComplete();
 
-            gameDivisorNoteColouring.BindValueChanged(_ => updateSnapColour());
-            StartTimeBindable.BindValueChanged(_ => updateSnapColour(), true);
-
-            if (column != null)
+            if (receivesDisplayColour())
             {
-                column.ColorSettingsEnabledBindable.BindValueChanged(_ => updateSnapColour());
-                column.EzNoteColourBindable.BindValueChanged(_ => updateSnapColour());
+                StartTimeBindable.BindValueChanged(_ => updateSnapColour(), true);
+
+                if (column != null)
+                {
+                    column.NoteColourChanged += onColumnNoteColourSettingsChanged;
+                    displayColourBound = true;
+                }
             }
+
+            updateSnapColour();
         }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            if (isDisposing)
+            {
+                if (headPiece is SkinnableDrawable skinnable)
+                    skinnable.OnSkinChanged -= updateSnapColour;
+
+                if (displayColourBound && column != null)
+                    column.NoteColourChanged -= onColumnNoteColourSettingsChanged;
+            }
+
+            base.Dispose(isDisposing);
+        }
+
+        private void onColumnNoteColourSettingsChanged() => updateSnapColour();
 
         protected override void OnApply()
         {
@@ -123,9 +138,6 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
             ApplyResult(result);
         }
 
-        /// <summary>
-        /// Some objects in mania may want to limit the max result.
-        /// </summary>
         protected virtual HitResult GetCappedResult(HitResult result) => result;
 
         public virtual bool OnPressed(KeyBindingPressEvent<ManiaAction> e)
@@ -151,33 +163,22 @@ namespace osu.Game.Rulesets.Mania.Objects.Drawables
         {
         }
 
+        private bool receivesDisplayColour()
+            => UseColorization && ManiaPlayfieldNoteDisplayTint.AllowsDisplayColour(DisplayColourPart);
+
         private void updateSnapColour()
         {
             if (headPiece == null)
                 return;
 
-            if (!SupportsImprovedNoteDisplayColour)
+            if (!receivesDisplayColour() || noteDisplayTint == null || column == null
+                || headPiece is SkinnableDrawable skin && skin.Drawable is FastNoteBase piece && piece.OwnsDisplayColour)
             {
                 headPiece.Colour = Color4.White;
                 return;
             }
 
-            bool columnColourEnabled = column != null && column.ColorSettingsEnabledBindable.Value;
-            bool divisorNoteColouringEnabled = gameDivisorNoteColouring.Value;
-
-            if (SupportsDivisorNoteDisplayTint && divisorNoteColouringEnabled && beatmap != null)
-            {
-                headPiece.Colour = ManiaNoteDisplayColour.ForDivisorNoteDisplayTint(
-                    beatmap,
-                    HitObject?.StartTime ?? 0,
-                    colours);
-            }
-            else if (columnColourEnabled)
-            {
-                headPiece.Colour = ManiaNoteDisplayColour.ForColumnNoteDisplayTint(column!.EzNoteColourBindable.Value);
-            }
-            else
-                headPiece.Colour = Color4.White;
+            headPiece.Colour = noteDisplayTint.GetDisplayColour(DisplayColourPart, column, HitObject?.StartTime ?? 0);
         }
 
         public bool CanRouteToKPoor => ManiaEzDrawableJudgement.CanRouteToKPoor(this);
