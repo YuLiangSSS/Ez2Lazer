@@ -16,6 +16,7 @@ using osu.Framework.Development;
 using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Logging;
+using osu.Framework.Localisation;
 using osu.Framework.Platform;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
@@ -23,6 +24,7 @@ using osu.Game.Extensions;
 using osu.Game.EzOsuGame.Analysis;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Database;
+using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Skills;
 using osu.Game.EzOsuGame.Skills.Dan;
@@ -386,7 +388,9 @@ namespace osu.Game.Database
             if (scoreIds.Count == 0)
                 return;
 
-            var notification = showProgressNotification(scoreIds.Count, "Recalculating local scores", "local scores have been recalculated");
+            var notification = showProgressNotification(scoreIds.Count,
+                EzAnalysisNotificationStrings.SCORES_RUNNING,
+                EzAnalysisNotificationStrings.SCORES_COMPLETED);
 
             int processedCount = 0;
             int failedCount = 0;
@@ -643,19 +647,20 @@ namespace osu.Game.Database
 
             if (scope.HasFlag(EzAnalysisSystem.SSR))
             {
-                // The chain reads SunnySR for dan, so whether SSR is stale is answered before the pass runs: the
-                // staleness covers both the absorbed algorithm revision and the rating the stored rows carry.
-                bool expired = skillStore.IsExpired(EzAnalysisSystem.SSR) || EzSSRTuningSnapshot.IsPending;
+                // A tuning edit never bumps the revision, so the stored rows look current while having been produced
+                // by another pair. Retiring them once, and recording the tuning in the same step, is what keeps that
+                // from turning into a full pass on every launch after an interrupted one: the pass below only fills
+                // what is still missing.
+                if (skillStore.IsExpired(EzAnalysisSystem.SSR) || EzSSRTuningSnapshot.IsPending)
+                {
+                    Logger.Log($"Retiring Sunny ratings for recomputation: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.SSR))}.");
 
-                if (populateMissingSunnyStarRatings(expired))
-                {
-                    skillStore.SetAppliedVersion(EzAnalysisSystem.SSR, EzSSRUnit.VERSION);
-                    EzSSRTuningSnapshot.Record();
+                    if (EzSSRTuningSnapshot.IsPending)
+                        EzSSRTuningSnapshot.Record();
                 }
-                else
-                {
-                    Logger.Log("Sunny rating pass did not finish; leaving its revision unapplied so the next launch retries.");
-                }
+
+                if (!populateMissingSunnyStarRatings())
+                    Logger.Log("Sunny rating pass did not finish; the remaining charts stay missing and are picked up next launch.");
             }
 
             if (scope.HasFlag(EzAnalysisSystem.Official))
@@ -687,59 +692,61 @@ namespace osu.Game.Database
 
             if (needsChartChain)
             {
+                // Same contract as the Sunny pass: a revision that is behind is retired once instead of being read as
+                // stale by every later pass, so a cancelled pass resumes on the rows still missing.
+                retireExpiredChainSystems(scope);
+
                 // One pass over the library. Each chart pays only for the stages it owes, but it is loaded,
                 // converted and written by one iteration instead of one per stage.
-                bool completed = populateChartChain(
+                populateChartChain(
                     skillStore.CollectChartChainState("BDSP"),
                     csi: scope.HasFlag(EzAnalysisSystem.CSI),
                     msd: scope.HasFlag(EzAnalysisSystem.Mina),
                     ppp: scope.HasFlag(EzAnalysisSystem.PPP),
                     dan: scope.HasFlag(EzAnalysisSystem.Dan));
-
-                // Only a pass that covered its work list may claim the revision: a cancelled one leaves the systems
-                // expired, which is what makes the next launch pick them up again.
-                if (completed)
-                {
-                    if (scope.HasFlag(EzAnalysisSystem.Mina))
-                        skillStore.SetAppliedVersion(EzAnalysisSystem.Mina, EzMinaEngine.VERSION);
-
-                    if (scope.HasFlag(EzAnalysisSystem.CSI))
-                        skillStore.SetAppliedVersion(EzAnalysisSystem.CSI, EzCSIEngine.VERSION);
-
-                    if (scope.HasFlag(EzAnalysisSystem.Dan))
-                        skillStore.SetAppliedVersion(EzAnalysisSystem.Dan, EzDanEngine.VERSION);
-
-                    if (scope.HasFlag(EzAnalysisSystem.PPP))
-                        skillStore.SetAppliedVersion(EzAnalysisSystem.PPP, EzPPPEngine.VERSION);
-                }
             }
 
             EzStartupTrace.Log($"BDSP EzRealm backfill end scope={scope}");
+        }
+
+        private void retireExpiredChainSystems(EzAnalysisSystem scope)
+        {
+            foreach (var system in new[] { EzAnalysisSystem.Mina, EzAnalysisSystem.CSI, EzAnalysisSystem.Dan, EzAnalysisSystem.PPP })
+            {
+                if (!scope.HasFlag(system) || !skillStore.IsExpired(system))
+                    continue;
+
+                Logger.Log($"Retiring {system} rows for recomputation: {string.Join(", ", skillStore.Invalidate(system))}.");
+            }
         }
 
         private void clearEzRealmMetadata(EzAnalysisSystem scope)
         {
             Logger.Log($"Forcing Ez Realm metadata recalculation ({scope})...");
 
-            // Marking a system expired is the whole of "recompute everything": the next pass treats every chart as
-            // owed, and the dependency edges carry the invalidation to the systems derived from it.
+            // Retiring a system is the whole of "recompute everything": its rows are gone, and the dependency edges
+            // carry that to the systems derived from it. The revision is recorded at the same time, so an interrupted
+            // pass resumes on whatever is still missing instead of retiring the library again.
             if (scope.HasFlag(EzAnalysisSystem.Mina))
-                Logger.Log($"Marking Mina and its downstream systems out of date: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.Mina))}");
+                Logger.Log($"Retiring Mina and its downstream systems: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.Mina))}");
 
             if (scope.HasFlag(EzAnalysisSystem.CSI))
-                Logger.Log($"Marking CSI and its downstream systems out of date: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.CSI))}");
+                Logger.Log($"Retiring CSI and its downstream systems: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.CSI))}");
 
             if (scope.HasFlag(EzAnalysisSystem.Dan))
-                Logger.Log($"Marking Dan out of date: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.Dan))}");
+                Logger.Log($"Retiring Dan: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.Dan))}");
 
             if (scope.HasFlag(EzAnalysisSystem.PPP))
-                Logger.Log($"Marking PP+ out of date: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.PPP))}");
+                Logger.Log($"Retiring PP+: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.PPP))}");
 
             if (scope.HasFlag(EzAnalysisSystem.SSR))
+            {
+                // Dan reads the Sunny rating, so the dependency edge retires it along with the ratings.
+                Logger.Log($"Retiring Sunny ratings: {string.Join(", ", skillStore.Invalidate(EzAnalysisSystem.SSR))}");
                 skillProvider.InvalidateLiveMetrics();
+            }
 
             bool clearBeatmapInfoFields = scope.HasFlag(EzAnalysisSystem.MetadataTags)
-                                          || scope.HasFlag(EzAnalysisSystem.SSR)
                                           || scope.HasFlag(EzAnalysisSystem.Official);
 
             if (!clearBeatmapInfoFields)
@@ -798,9 +805,6 @@ namespace osu.Game.Database
                         if (scope.HasFlag(EzAnalysisSystem.Official))
                             EzRatingWriter.Clear(beatmap, EzAnalysisSystem.Official);
 
-                        if (scope.HasFlag(EzAnalysisSystem.SSR) && EzSSRUnit.SupportsRuleset(beatmap.Ruleset.OnlineID))
-                            EzRatingWriter.WriteSR(beatmap, EzAnalysisSystem.SSR, -1);
-
                         totalProcessed++;
                     }
                 });
@@ -816,18 +820,18 @@ namespace osu.Game.Database
         private void forceEzRealmMetadataRecalculation() => clearEzRealmMetadata(EzAnalysisSystem.All);
 
         /// <summary>
-        /// Brings the stored SunnyStarRatings up to date, rewriting every rated chart when the system's revision moved.
+        /// Fills the SunnyStarRatings that are not stored yet.
         /// </summary>
         /// <remarks>
-        /// A revision bump has to retire the stored values, not just the missing ones: the rating is a number stamped
-        /// with the algorithm that produced it, and a bump says those stamps no longer answer the question. Only a
-        /// pass that covered its whole work list may claim the revision, which is what makes a cancelled pass retry.
+        /// Retirement happens before this runs (<see cref="EzChartSkillStore.Invalidate"/>), so the only question here
+        /// is whether a chart has a rating: a pass that is cancelled leaves the rest missing, and the next launch
+        /// continues from there instead of retiring everything again.
         /// </remarks>
-        private bool populateMissingSunnyStarRatings(bool expired)
+        private bool populateMissingSunnyStarRatings()
         {
             HashSet<Guid> beatmapIds = new HashSet<Guid>();
 
-            Logger.Log($"Querying for beatmaps with stale SunnyStarRatings (expired={expired})...");
+            Logger.Log("Querying for beatmaps with missing SunnyStarRatings...");
 
             realmAccess.Run(r =>
             {
@@ -836,7 +840,7 @@ namespace osu.Game.Database
                     if (b.BeatmapSet == null)
                         continue;
 
-                    if (!expired && b.EzRatingData.SunnySR >= 0)
+                    if (b.EzRatingData.SunnySR >= 0)
                         continue;
 
                     if (!EzSSRUnit.SupportsRuleset(b.Ruleset.OnlineID))
@@ -851,7 +855,9 @@ namespace osu.Game.Database
 
             Logger.Log($"Found {beatmapIds.Count} beatmaps which require SunnyStarRating reprocessing.");
 
-            var notification = showProgressNotification(beatmapIds.Count, "Reprocessing SunnyStarRating for beatmaps", "beatmaps' SunnyStarRatings have been updated");
+            var notification = showProgressNotification(beatmapIds.Count,
+                EzAnalysisNotificationStrings.SUNNY_RUNNING,
+                EzAnalysisNotificationStrings.SUNNY_COMPLETED);
 
             ChartBatchResult batch = runChartBatch(beatmapIds.ToList(), processSunnyRating, notification);
 
@@ -914,21 +920,17 @@ namespace osu.Game.Database
             }
 
             Logger.Log(
-                $"Found {work.Count} beatmaps which require chart chain reprocessing (Mina v{EzMinaEngine.VERSION}, CSI v{EzCSIEngine.VERSION}, Dan v{EzDanEngine.VERSION}).");
+                $"Found {work.Count} beatmaps which require chart chain reprocessing ({describeChartStages(csi, msd, ppp, dan)}; Mina v{EzMinaEngine.VERSION}, CSI v{EzCSIEngine.VERSION}, Dan v{EzDanEngine.VERSION}).");
 
             var notification = showProgressNotification(work.Count,
-                $"Reprocessing chart analysis chain ({describeChartStages(csi, msd, ppp, dan)})",
-                "beatmaps' analysis chain has been updated");
-
-            int processedCount = 0;
-            int failedCount = 0;
-            int attemptedCount = 0;
+                EzAnalysisNotificationStrings.ChartChainRunning(msd, csi, dan, ppp),
+                EzAnalysisNotificationStrings.ChartChainCompleted(msd, csi, dan, ppp));
 
             ChartBatchResult result = runChartBatch(work, processChart, notification);
 
-            attemptedCount = result.Attempted;
-            processedCount = result.Processed;
-            failedCount = result.Failed;
+            int attemptedCount = result.Attempted;
+            int processedCount = result.Processed;
+            int failedCount = result.Failed;
 
             if (result.Aborted)
                 Logger.Log($"Chart chain backfill aborted during shutdown after {attemptedCount} of {work.Count}.");
@@ -1001,25 +1003,24 @@ namespace osu.Game.Database
             }
         }
 
-        // Names the stages a chart chain pass runs, in order, so the progress notification says which systems are
-        // being computed rather than "chain".
+        // Names the stages a chart chain pass runs, in abbreviation form, for the log line that explains the pass.
         private static string describeChartStages(bool csi, bool msd, bool ppp, bool dan)
         {
             var labels = new List<string>(4);
 
             if (msd)
-                labels.Add(EzEnumMetaCache<EzAnalysisSystem>.Meta(EzAnalysisSystem.Mina).NameEn);
+                labels.Add(EzAnalysisNotificationStrings.DataAbbreviation(EzAnalysisSystem.Mina));
 
             if (csi)
-                labels.Add(EzEnumMetaCache<EzAnalysisSystem>.Meta(EzAnalysisSystem.CSI).NameEn);
+                labels.Add(EzAnalysisNotificationStrings.DataAbbreviation(EzAnalysisSystem.CSI));
 
             if (dan)
-                labels.Add(EzEnumMetaCache<EzAnalysisSystem>.Meta(EzAnalysisSystem.Dan).NameEn);
+                labels.Add(EzAnalysisNotificationStrings.DataAbbreviation(EzAnalysisSystem.Dan));
 
             if (ppp)
-                labels.Add(EzEnumMetaCache<EzAnalysisSystem>.Meta(EzAnalysisSystem.PPP).NameEn);
+                labels.Add(EzAnalysisNotificationStrings.DataAbbreviation(EzAnalysisSystem.PPP));
 
-            return string.Join(", ", labels);
+            return string.Join(" / ", labels);
         }
 
         /// <summary>
@@ -1059,8 +1060,8 @@ namespace osu.Game.Database
 
             var notification = showProgressNotification(
                 totalBeatmaps,
-                "Populating Ez beatmap tags in Realm",
-                "beatmaps have been updated with Ez tags");
+                EzAnalysisNotificationStrings.TAGS_RUNNING,
+                EzAnalysisNotificationStrings.TAGS_COMPLETED);
 
             int processedCount = 0;
             int failedCount = 0;
@@ -1157,7 +1158,7 @@ namespace osu.Game.Database
             realmAccess.Run(r =>
             {
                 foreach (var b in r.All<BeatmapInfo>()
-                                 .Where(b => b.BeatmapSet != null && (b.StarRating < 0 || b.PerformancePoints < 0)))
+                                   .Where(b => b.BeatmapSet != null && (b.StarRating < 0 || b.PerformancePoints < 0)))
                 {
                     if (!b.Ruleset.Available)
                         continue;
@@ -1172,8 +1173,8 @@ namespace osu.Game.Database
             Logger.Log($"Found {beatmapIds.Count} beatmaps which require official star and PP reprocessing.");
 
             var notification = showProgressNotification(beatmapIds.Count,
-                "Reprocessing official star and baseline PP for beatmaps",
-                "beatmaps' official star and baseline PP have been updated");
+                EzAnalysisNotificationStrings.OFFICIAL_RUNNING,
+                EzAnalysisNotificationStrings.OFFICIAL_COMPLETED);
 
             ChartBatchResult batch = runChartBatch(beatmapIds.ToList(), processBaseline, notification);
 
@@ -1233,7 +1234,9 @@ namespace osu.Game.Database
             Logger.Log($"Found {candidates.Count} beatmaps which require Sunny pp, PP+ star and pp, Mina rating.");
 
             // TODO: 这里的计算剔除了 SSR? 很奇怪
-            var notification = showProgressNotification(candidates.Count, "Filling Sunny pp, PP+ star and pp, Mina rating", "beatmaps' per-system baselines have been updated");
+            var notification = showProgressNotification(candidates.Count,
+                EzAnalysisNotificationStrings.BASELINE_RUNNING,
+                EzAnalysisNotificationStrings.BASELINE_COMPLETED);
 
             ChartBatchResult batch = runChartBatch(candidates, processBaseline, notification);
 
@@ -2266,6 +2269,14 @@ namespace osu.Game.Database
 
         private const int notification_progress_update_interval = 25;
 
+        /// <summary>
+        /// Base text per notification, so a progress update replaces the count instead of parsing the current text.
+        /// Parsing would cut a localized running line at its own parenthesis and drop the stage list.
+        /// </summary>
+        private readonly Dictionary<ProgressNotification, LocalisableString> notificationBaseText = new Dictionary<ProgressNotification, LocalisableString>();
+
+        private readonly Lock notificationTextLock = new Lock();
+
         private void updateNotificationProgress(ProgressNotification? notification, int processedCount, int totalCount)
         {
             if (notification == null)
@@ -2290,7 +2301,15 @@ namespace osu.Game.Database
                 if (notification.State == ProgressNotificationState.Cancelled)
                     return;
 
-                notification.Text = notification.Text.ToString().Split('(').First().TrimEnd() + $" ({processedCount} of {totalCount})";
+                LocalisableString baseText;
+
+                lock (notificationTextLock)
+                {
+                    if (!notificationBaseText.TryGetValue(notification, out baseText))
+                        baseText = notification.Text;
+                }
+
+                notification.Text = $"{baseText} ({EzAnalysisNotificationStrings.Progress(processedCount, totalCount)})";
                 notification.Progress = (float)processedCount / totalCount;
             });
 
@@ -2311,24 +2330,35 @@ namespace osu.Game.Database
                 }
                 else if (processedCount == totalCount)
                 {
-                    notification.CompletionText = $"{processedCount} {notification.CompletionText}";
+                    notification.CompletionText = $"{EzAnalysisNotificationStrings.CompletedCount(processedCount)}{notification.CompletionText}";
                     notification.Progress = 1;
                     notification.State = ProgressNotificationState.Completed;
                 }
                 else
                 {
-                    notification.Text = $"{processedCount} of {totalCount} {notification.CompletionText}";
+                    LocalisableString baseText;
+
+                    lock (notificationTextLock)
+                    {
+                        if (!notificationBaseText.TryGetValue(notification, out baseText))
+                            baseText = notification.Text;
+                    }
+
+                    notification.Text = $"{EzAnalysisNotificationStrings.Progress(processedCount, totalCount)} {baseText}";
 
                     // We may have arrived here due to user cancellation or completion with failures.
                     if (failedCount > 0)
-                        notification.Text += $" Check logs for issues with {failedCount} failed items.";
+                        notification.Text = $"{notification.Text}{EzAnalysisNotificationStrings.FailedCount(failedCount.Value)}";
 
                     notification.State = ProgressNotificationState.Cancelled;
                 }
+
+                lock (notificationTextLock)
+                    notificationBaseText.Remove(notification);
             });
         }
 
-        private ProgressNotification? showProgressNotification(int totalCount, string running, string completed)
+        private ProgressNotification? showProgressNotification(int totalCount, LocalisableString running, LocalisableString completed)
         {
             if (notificationOverlay == null)
             {
@@ -2342,6 +2372,11 @@ namespace osu.Game.Database
                 CompletionText = completed,
                 State = ProgressNotificationState.Active
             };
+
+            notification.Text = $"{running} ({EzAnalysisNotificationStrings.Progress(0, totalCount)})";
+
+            lock (notificationTextLock)
+                notificationBaseText[notification] = running;
 
             lastNotificationProgressReported = -1;
 

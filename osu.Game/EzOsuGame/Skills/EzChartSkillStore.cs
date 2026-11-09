@@ -62,7 +62,6 @@ namespace osu.Game.EzOsuGame.Skills
         /// </summary>
         public EzSkillRowState GetBeatmapSystemState(string beatmapHash, EzAnalysisSystem system)
         {
-
             string systemId = system.ToStorageId();
 
             if (string.IsNullOrEmpty(beatmapHash) || string.IsNullOrEmpty(systemId))
@@ -245,18 +244,79 @@ namespace osu.Game.EzOsuGame.Skills
         public bool IsExpired(EzAnalysisSystem system) => GetAppliedVersion(system) != system.CurrentVersion();
 
         /// <summary>
-        /// Marks <paramref name="system"/> and every system derived from it as unapplied, so the next pass recomputes
-        /// them. The dependency edges are the ones the rebuild catalog already declares.
+        /// Retires <paramref name="system"/> and every system derived from it, so the next pass recomputes them.
+        /// The dependency edges are the ones the rebuild catalog already declares.
         /// </summary>
+        /// <remarks>
+        /// The rows are deleted and the current revision is recorded in the same step. Pairing "nothing stored" with
+        /// "at this revision" is what makes a pass resumable: the next launch fills whatever is still missing instead
+        /// of retiring the whole library again. Rows carry a revision, but the passes select on row presence, so a
+        /// bump that only moved a stamp would leave the old rows looking settled.
+        /// </remarks>
         public IReadOnlyList<EzAnalysisSystem> Invalidate(EzAnalysisSystem system)
         {
             var invalidated = new List<EzAnalysisSystem> { system };
             invalidated.AddRange(DownstreamOf(system));
 
             foreach (var affected in invalidated)
-                SetAppliedVersion(affected, 0);
+                clearRows(affected);
+
+            foreach (var affected in invalidated)
+            {
+                int version = affected.CurrentVersion();
+
+                if (version > 0)
+                    SetAppliedVersion(affected, version);
+            }
 
             return invalidated;
+        }
+
+        private void clearRows(EzAnalysisSystem system)
+        {
+            switch (system)
+            {
+                case EzAnalysisSystem.Mina:
+                    ClearBeatmapMsd();
+                    break;
+
+                case EzAnalysisSystem.CSI:
+                    ClearChartSkillInfo();
+                    break;
+
+                case EzAnalysisSystem.Dan:
+                    ClearChartDan();
+                    break;
+
+                case EzAnalysisSystem.PPP:
+                    ClearBeatmapPPP();
+                    break;
+
+                case EzAnalysisSystem.SSR:
+                    ClearRatings(EzAnalysisSystem.SSR);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Drops one system's stored star and pp from every beatmap.
+        /// </summary>
+        /// <remarks>
+        /// The rating columns carry no revision of their own, so deleting them is the only way to make a changed
+        /// tuning coefficient observable to the pass that fills them.
+        /// </remarks>
+        public void ClearRatings(EzAnalysisSystem system)
+        {
+            realmAccess.Write(r =>
+            {
+                foreach (var beatmap in r.All<BeatmapInfo>())
+                {
+                    if (beatmap.EzRatingData.GetStar(system) < 0 && beatmap.EzRatingData.GetPerformance(system) < 0)
+                        continue;
+
+                    EzRatingWriter.Clear(beatmap, system);
+                }
+            });
         }
 
         /// <summary>
@@ -552,7 +612,7 @@ namespace osu.Game.EzOsuGame.Skills
             ArgumentException.ThrowIfNullOrWhiteSpace(beatmapHash);
 
             DateTimeOffset at = computedAt ?? DateTimeOffset.UtcNow;
-            int revision = EzCSIEngine.VERSION;
+            const int revision = EzCSIEngine.VERSION;
 
             realmAccess.Write(r =>
             {
@@ -647,7 +707,7 @@ namespace osu.Game.EzOsuGame.Skills
             // Stamped with the facet revision (not chartDan.AlgorithmVersion, which stays the pure
             // dan algorithm version on the DTO) so a later Mina/CSI bump retires this row.
             DateTimeOffset at = chartDan.ComputedAt == default ? DateTimeOffset.UtcNow : chartDan.ComputedAt;
-            int version = EzDanEngine.VERSION;
+            const int version = EzDanEngine.VERSION;
 
             realmAccess.Write(r =>
             {
@@ -821,7 +881,7 @@ namespace osu.Game.EzOsuGame.Skills
 
             if (rulesetOnlineId >= 0 && system == EzAnalysisSystem.PPP)
             {
-                int bundle = EzPPPEngine.VERSION;
+                const int bundle = EzPPPEngine.VERSION;
 
                 if (bundle > 0)
                     return bundle;
@@ -839,11 +899,11 @@ namespace osu.Game.EzOsuGame.Skills
 
             // The row's revision is part of the answer: a complete axis set produced by an older bundle is a result of
             // that bundle, not of the one in force. Reading only the axis set made a PP+ revision bump a no-op.
-            int revision = EzPPPEngine.VERSION;
+            const int revision = EzPPPEngine.VERSION;
 
             foreach (var row in stored)
             {
-                if (revision > 0 && row.AlgorithmVersion != revision)
+                if (row.AlgorithmVersion != revision)
                     continue;
 
                 current[row.SkillId] = row.Value;
