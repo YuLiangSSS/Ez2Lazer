@@ -201,11 +201,11 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.SkillLnChartMinHoldObjects, 150, 0, 1000);
 
             // SunnySR 计算的两个系数。默认值就是落库所用的值；改动属于用户对算法的永久修订，不触发版本换代。
-            SetDefault(Ez2Setting.SsrRescaleThreshold, 8.0, 6.0, 10.0, 1.0);
+            SetDefault(Ez2Setting.SsrRescaleThreshold, 8.0, 6.0, 15.0, 1.0);
             SetDefault(Ez2Setting.SsrLnMultiplier, 5.5, 2.0, 8.0, 0.5);
 
             // 落库所用的那组系数。默认等于上一行的默认值，所以已有库不会被判成待重算。
-            SetDefault(Ez2Setting.SsrAppliedRescaleThreshold, 8.0, 6.0, 10.0, 1.0);
+            SetDefault(Ez2Setting.SsrAppliedRescaleThreshold, 8.0, 6.0, 15.0, 1.0);
             SetDefault(Ez2Setting.SsrAppliedLnMultiplier, 5.5, 2.0, 8.0, 0.5);
 
             // 悬停联动：鼠标移到左侧标题 / 详情 / 排行榜区域时，右侧谱面传送带滚动定位到当前选中谱面（fluXis 同款悬停联动）。

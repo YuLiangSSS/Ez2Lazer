@@ -99,7 +99,7 @@ This folder's code docs describe the skill computation pipeline used by Ez2Lazer
 
 ### SSR 的两个系数是用户设置，不是版本
 
-`Ez2Setting.SsrRescaleThreshold`（默认 8，范围 6–10）与 `SsrLnMultiplier`（默认 5.5，范围 2–8）
+`Ez2Setting.SsrRescaleThreshold`（默认 8，范围 6–15）与 `SsrLnMultiplier`（默认 5.5，范围 2–8）
 是 SSR 计算的两个修正系数，位于「设置 → Ez → 分析」。
 
 - **不换代**：改动不 bump 任何存储版本，也不追溯重算已落盘的行。旧行保持用旧系数算出的值，

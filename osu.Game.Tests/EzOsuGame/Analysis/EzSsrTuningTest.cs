@@ -122,8 +122,9 @@ namespace osu.Game.Tests.EzOsuGame.Analysis
         [TestCase(0.0, 6.0)]
         [TestCase(-1.0, 6.0)]
         [TestCase(double.NaN, 6.0)]
-        [TestCase(20.0, 10.0)]
-        [TestCase(double.PositiveInfinity, 10.0)]
+        [TestCase(15.0, 15.0)]
+        [TestCase(20.0, 15.0)]
+        [TestCase(double.PositiveInfinity, 15.0)]
         public void OutOfRangeThresholdIsClamped(double written, double expected)
         {
             config.SetValue(Ez2Setting.SsrRescaleThreshold, written);
@@ -156,7 +157,7 @@ namespace osu.Game.Tests.EzOsuGame.Analysis
             double low = rate(beatmap, 5.0, 5.5);
             double high = rate(beatmap, 10.0, 5.5);
 
-            // Above the highest threshold the settings allow, otherwise the rescale never engages and this is vacuous.
+            // The fixture rates above both thresholds (5 and 10), otherwise the rescale never engages and this is vacuous.
             Assert.That(low, Is.GreaterThan(10.0), $"fixture rates {low}, too low to exercise the rescale");
             Assert.That(high, Is.GreaterThan(low), "a higher threshold compresses less of the rating");
         }
