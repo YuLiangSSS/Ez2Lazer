@@ -209,6 +209,7 @@ namespace osu.Game.Screens.Select
         private Bindable<bool> ezSongSelectHoverSyncCarousel = null!;
 
         private EzBeatmapPreviewOverlay ezBeatmapPreviewOverlay = null!;
+        private EzDanBackgroundOverlay ezDanBackgroundOverlay = null!;
         private ModSettingChangeTracker? previewOverlayModSettingTracker;
         private CancellationTokenSource? previewPlayableCancellation;
         private ScheduledDelegate? previewModReloadDebounce;
@@ -230,6 +231,7 @@ namespace osu.Game.Screens.Select
 
             AddRangeInternal(new Drawable[]
             {
+                ezDanBackgroundOverlay = new EzDanBackgroundOverlay { Depth = 1, },
                 new ScrollAdjustsVolume(),
                 onlineLookupSource,
                 mainContent = new Container
@@ -1276,6 +1278,8 @@ namespace osu.Game.Screens.Select
 
         partial void onEzSongSelectEntering(ScreenTransitionEvent e);
 
+        partial void onEzSongSelectBackgroundRevealed(bool revealed);
+
         private partial double? onEzGetFilterScheduleDelay(bool isFirstFilter);
 
         partial void onEzCarouselItemsPresented();
@@ -1381,6 +1385,7 @@ namespace osu.Game.Screens.Select
                     skinnableContent.FadeOut(200, Easing.OutQuint);
 
                     ezBeatmapPreviewOverlay.SetSongSelectBackgroundRevealed(true);
+                    onEzSongSelectBackgroundRevealed(true);
 
                     updateBackgroundDim();
 
@@ -1413,6 +1418,7 @@ namespace osu.Game.Screens.Select
                 skinnableContent.FadeIn(500, Easing.OutQuint);
 
                 ezBeatmapPreviewOverlay.SetSongSelectBackgroundRevealed(false);
+                onEzSongSelectBackgroundRevealed(false);
 
                 Footer?.Show();
             }
@@ -1421,6 +1427,11 @@ namespace osu.Game.Screens.Select
             revealBackgroundDelegate = null;
 
             updateBackgroundDim();
+        }
+
+        partial void onEzSongSelectBackgroundRevealed(bool revealed)
+        {
+            ezDanBackgroundOverlay.BackgroundRevealed.Value = revealed;
         }
 
         #endregion

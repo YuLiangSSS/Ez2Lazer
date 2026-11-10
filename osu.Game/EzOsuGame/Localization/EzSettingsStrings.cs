@@ -486,6 +486,10 @@ namespace osu.Game.EzOsuGame.Localization
             "数据维护已在后台运行，请等待当前任务完成。",
             "Data maintenance is already running in the background. Wait for the current task to finish.");
 
+        public static readonly EzLocalizationManager.EzLocalisableString DATA_REBUILD_IN_PROGRESS = new EzLocalizationManager.EzLocalisableString(
+            "后台补算进行中，进度见右上角通知。",
+            "Backfill is running in the background; see the notification tray for progress.");
+
         public static readonly EzLocalizationManager.EzLocalisableString DATA_REBUILD_SQLITE_DISABLED = new EzLocalizationManager.EzLocalisableString(
             "SQLite 分析缓存已关闭，请在上方启用后再执行。",
             "SQLite analysis cache is disabled. Enable it above before running this action.");
@@ -1022,6 +1026,16 @@ namespace osu.Game.EzOsuGame.Localization
         public static readonly LocalisableString SSR_TUNING_CHANGED_EXIT_CANCEL = new EzLocalizationManager.EzLocalisableString(
             "返回设置",
             "Back to settings");
+
+        public static readonly LocalisableString SKILL_SONG_SELECT_DAN_FANATIC = new EzLocalizationManager.EzLocalisableString(
+            "段位痴",
+            "Dan fanatic");
+
+        public static readonly LocalisableString SKILL_SONG_SELECT_DAN_FANATIC_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "开启后，在选歌界面谱面/菜单背景上叠一层当前谱 ChartDan 的 RC/LN 段位图（半透明水印）。"
+            + "\n段位图按最长边 500 像素加载（更小则保持原图），与 HUD 小段位标分页独立。",
+            "When enabled, overlays semi-transparent RC/LN chart-dan badge art on the song-select background."
+            + "\nTextures load with max edge 500 px (smaller sources stay native), separate from HUD badge atlasing.");
 
         #endregion
 

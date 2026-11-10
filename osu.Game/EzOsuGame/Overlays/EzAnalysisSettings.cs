@@ -7,9 +7,10 @@ using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
 using osu.Framework.Localisation;
+using osu.Game.EzOsuGame.Analysis;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Localization;
-using osu.Game.EzOsuGame.Analysis;
+using osu.Game.EzOsuGame.Scoring.Bonus;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets;
@@ -46,6 +47,27 @@ namespace osu.Game.EzOsuGame.Overlays
                 {
                     Keywords = new[] { "analysis", "sqlite", "cache", "warmup", "persistent" }
                 },
+                new SettingsItemV2(new FormEnumDropdown<EzScoreBonusTendency>
+                {
+                    Caption = EzSettingsStrings.SCORE_BONUS_TENDENCY,
+                    HintText = EzSettingsStrings.SCORE_BONUS_TENDENCY_TOOLTIP,
+                    Current = ezConfig.GetBindable<EzScoreBonusTendency>(Ez2Setting.ScoreBonusTendency),
+                })
+                {
+                    Keywords = new[] { "analysis", "ez", "bonus", "miss", "附加分" }
+                },
+                new SettingsItemV2(new FormSliderBar<double>
+                {
+                    Caption = EzSettingsStrings.SCORE_BONUS_CROSS,
+                    HintText = EzSettingsStrings.SCORE_BONUS_CROSS_TOOLTIP,
+                    RelativeSizeAxes = Axes.X,
+                    Current = ezConfig.GetBindable<double>(Ez2Setting.ScoreBonusCrossMs),
+                    KeyboardStep = 1,
+                    LabelFormat = v => $"{v:N0} ms",
+                })
+                {
+                    Keywords = new[] { "analysis", "ez", "bonus", "boundary", "分界", "44" }
+                },
                 new SettingsItemV2(new FormSliderBar<int>
                 {
                     Caption = EzSettingsStrings.SKILL_LN_CHART_MIN_HOLD_OBJECTS,
@@ -55,6 +77,15 @@ namespace osu.Game.EzOsuGame.Overlays
                 })
                 {
                     Keywords = new[] { "ez", "skill", "ln", "hold", "chartdan", "dan", "ratio", "技能", "占比", "门槛" }
+                },
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = EzSettingsStrings.SKILL_SONG_SELECT_DAN_FANATIC,
+                    HintText = EzSettingsStrings.SKILL_SONG_SELECT_DAN_FANATIC_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.SkillDanFanatic),
+                })
+                {
+                    Keywords = new[] { "ez", "skill", "dan", "chartdan", "song select", "background", "段位", "选歌", "痴" }
                 },
                 new SettingsItemV2(new FormSliderBar<double>
                 {

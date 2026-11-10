@@ -20,16 +20,25 @@ namespace osu.Game.EzOsuGame.Localization
         public static readonly LocalisableString OFFICIAL_COMPLETED = new EzLocalizationManager.EzLocalisableString("官方 SR / PP 已更新", "beatmaps' official SR / PP updated");
 
         public static readonly LocalisableString BASELINE_RUNNING = new EzLocalizationManager.EzLocalisableString(
-            "补算 Sunny PP、PP+ SR / PP、Mina SR", "Filling Sunny PP, PP+ SR / PP and Mina SR");
+            "补算 Sunny PP、Mina SR", "Filling Sunny PP and Mina SR");
 
         public static readonly LocalisableString BASELINE_COMPLETED = new EzLocalizationManager.EzLocalisableString(
-            "各系统 SR / PP 已更新", "beatmaps' per-system SR / PP updated");
+            "Sunny PP / Mina SR 已更新", "beatmaps' Sunny PP / Mina SR updated");
 
         public static readonly LocalisableString TAGS_RUNNING = new EzLocalizationManager.EzLocalisableString("补算谱面标签（Tag）", "Filling chart tags");
         public static readonly LocalisableString TAGS_COMPLETED = new EzLocalizationManager.EzLocalisableString("谱面标签（Tag）已更新", "beatmaps' tags updated");
 
         public static readonly LocalisableString SCORES_RUNNING = new EzLocalizationManager.EzLocalisableString("重算本地成绩", "Recalculating local scores");
         public static readonly LocalisableString SCORES_COMPLETED = new EzLocalizationManager.EzLocalisableString("本地成绩已重算", "local scores recalculated");
+
+        public static readonly LocalisableString MAINTENANCE_PREP_RUNNING = new EzLocalizationManager.EzLocalisableString(
+            "数据维护：扫描谱面库…", "Data maintenance: scanning beatmaps…");
+
+        public static readonly LocalisableString MAINTENANCE_PREP_COMPLETED = new EzLocalizationManager.EzLocalisableString(
+            "数据维护完成", "Data maintenance finished");
+
+        public static readonly LocalisableString MAINTENANCE_NOTHING_PENDING = new EzLocalizationManager.EzLocalisableString(
+            "所选项目无待补算", "Nothing pending for the selected maintenance item(s)");
 
         /// <summary>Chart chain, naming the stages that are actually running.</summary>
         public static LocalisableString ChartChainRunning(bool msd, bool csi, bool dan, bool ppp)

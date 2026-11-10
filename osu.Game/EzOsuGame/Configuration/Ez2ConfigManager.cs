@@ -8,6 +8,7 @@ using System.Drawing;
 using System.Text;
 using System.Threading;
 using JetBrains.Annotations;
+using osu.Framework.Audio;
 using osu.Framework.Bindables;
 using osu.Framework.Configuration;
 using osu.Framework.Development;
@@ -99,6 +100,8 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.EzAnalysisRecEnabled, true);
             SetDefault(Ez2Setting.EzAnalysisSqliteEnabled, true);
             SetDefault(Ez2Setting.AnalysisSystemSelection, string.Empty);
+            SetDefault(Ez2Setting.SongSelectSkillSortAxis, string.Empty);
+            SetDefault(Ez2Setting.SongSelectSkillGroupAxis, string.Empty);
             SetDefault(Ez2Setting.HideMainMenuOnlineBanner, false);
 
             // 隐藏成绩：选歌左侧成绩栏与结算页面的 Accuracy / Score / MaxCombo / 判定数量数字以 * 显示。
@@ -199,6 +202,7 @@ namespace osu.Game.EzOsuGame.Configuration
 
             // Ez 技能：默认与 EzDanAlgorithm.LN_CHART_MIN_HOLD_OBJECTS 一致。
             SetDefault(Ez2Setting.SkillLnChartMinHoldObjects, 150, 0, 1000);
+            SetDefault(Ez2Setting.SkillDanFanatic, false);
 
             // SunnySR 计算的两个系数。默认值就是落库所用的值；改动属于用户对算法的永久修订，不触发版本换代。
             SetDefault(Ez2Setting.SsrRescaleThreshold, 8.0, 6.0, 15.0, 1.0);
@@ -215,10 +219,11 @@ namespace osu.Game.EzOsuGame.Configuration
 
             #region 音频与输入
 
-            SetDefault(Ez2Setting.AsioSampleRate, 48000);
+            SetDefault(Ez2Setting.AsioSampleRate, AudioOutputDefaults.DEFAULT_SAMPLE_RATE);
             SetDefault(Ez2Setting.AsioBitDepth, 24);
-            SetDefault(Ez2Setting.AsioBufferSize, 128);
+            SetDefault(Ez2Setting.AsioBufferSize, AudioOutputDefaults.DEFAULT_ASIO_BUFFER_SIZE);
             SetDefault(Ez2Setting.AsioUseExternalPCM, true);
+            SetDefault(Ez2Setting.WasapiExclusiveBufferMs, AudioOutputDefaults.WASAPI_EXCLUSIVE_AUTO);
 
             SetDefault(Ez2Setting.OffsetPlusMania, 0.0, -200.0, 200.0, 1.0);
             SetDefault(Ez2Setting.OffsetPlusNonMania, 0.0, -200.0, 200.0, 1.0);
@@ -1055,6 +1060,12 @@ namespace osu.Game.EzOsuGame.Configuration
         /// </summary>
         AnalysisSystemSelection,
 
+        /// <summary>选歌「技能轴」排序所选轴，格式 <c>mina:stream</c> / <c>ppp:strain</c>；空表示未选。</summary>
+        SongSelectSkillSortAxis,
+
+        /// <summary>选歌「技能轴」分组所选轴，格式同 <see cref="SongSelectSkillSortAxis"/>。</summary>
+        SongSelectSkillGroupAxis,
+
         HideMainMenuOnlineBanner,
 
         /// <summary>
@@ -1358,6 +1369,7 @@ namespace osu.Game.EzOsuGame.Configuration
         AsioBitDepth,
         AsioBufferSize,
         AsioUseExternalPCM,
+        WasapiExclusiveBufferMs,
         OffsetPlusMania,
         OffsetPlusNonMania,
         StdJudgeMode,
@@ -1429,11 +1441,13 @@ namespace osu.Game.EzOsuGame.Configuration
         ManiaPseudo3DRotation,
 
         ManiaHoldTailAlpha,
+
         /// <summary>
         /// LN 投皮距离档位。UI 0-8，除 32 得到节拍；0 关闭投皮额外负担，默认 4 = 4/32 = 2/16。进局 Get 一次快照。
         /// </summary>
         ManiaHoldTailMaskGradientHeight,
         ManiaLNGradientEnable,
+
         /// <summary>
         /// 动态投皮。进局时 Get 一次快照，局内不跟随设置变更；开启后按 tracker 当前拍长调整投皮距离。
         /// </summary>
@@ -1522,6 +1536,9 @@ namespace osu.Game.EzOsuGame.Configuration
         /// 与 <c>EzDanAlgorithm.LnPrimaryMinRatioFor</c> 为「或」关系。
         /// </summary>
         SkillLnChartMinHoldObjects,
+
+        /// <summary>选歌界面背景叠 chart-dan 段位图（「段位痴」）。</summary>
+        SkillDanFanatic,
     }
 
     public enum EzColumnType : byte
