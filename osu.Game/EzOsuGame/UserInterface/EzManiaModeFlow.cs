@@ -125,7 +125,7 @@ namespace osu.Game.EzOsuGame.UserInterface
         {
             base.Update();
 
-            float parentAvailable = 0f;
+            float parentAvailable;
             if (Parent is Container c)
                 parentAvailable = Math.Max(0, c.DrawWidth - c.Padding.TotalHorizontal);
             else
@@ -295,7 +295,7 @@ namespace osu.Game.EzOsuGame.UserInterface
         private partial class AltEnumModeBlock<TEnum> : OsuClickableContainer, IHasPopover
             where TEnum : struct, Enum
         {
-            private static readonly MarginPadding block_padding = new() { Horizontal = 4, Vertical = 1 };
+            private readonly MarginPadding blockPadding = new MarginPadding { Horizontal = 4, Vertical = 1 };
 
             private readonly string fixedLabel;
             private readonly Func<int, string> getDisplayName;
@@ -314,8 +314,6 @@ namespace osu.Game.EzOsuGame.UserInterface
                 this.getDisplayName = getDisplayName;
 
                 Height = block_row_height;
-                CornerRadius = EzUIStyleV1.CORNER_RADIUS_CHIP;
-                Masking = true;
             }
 
             public void Attach(Bindable<TEnum> current) => bindable = current;
@@ -335,13 +333,18 @@ namespace osu.Game.EzOsuGame.UserInterface
                 return true;
             }
 
-            protected override bool OnHover(HoverEvent e) => altHighlightActive && base.OnHover(e);
+            protected override bool OnHover(HoverEvent e)
+            {
+                if (!altHighlightActive)
+                    return false;
+
+                refreshColours();
+                return base.OnHover(e);
+            }
 
             protected override void OnHoverLost(HoverLostEvent e)
             {
-                if (!altHighlightActive)
-                    refreshColours();
-
+                refreshColours();
                 base.OnHoverLost(e);
             }
 
@@ -350,10 +353,12 @@ namespace osu.Game.EzOsuGame.UserInterface
             {
                 this.colourProvider = colourProvider;
 
+                CornerRadius = EzUIStyleV1.CORNER_RADIUS_CHIP;
+                Masking = true;
+
                 Child = new Container
                 {
                     RelativeSizeAxes = Axes.Both,
-                    Padding = block_padding,
                     Children = new Drawable[]
                     {
                         background = new Box
@@ -368,6 +373,7 @@ namespace osu.Game.EzOsuGame.UserInterface
                             Spacing = new Vector2(label_value_spacing),
                             Anchor = Anchor.CentreLeft,
                             Origin = Anchor.CentreLeft,
+                            Padding = blockPadding,
                             Children = new Drawable[]
                             {
                                 labelText = new OsuSpriteText
@@ -429,9 +435,14 @@ namespace osu.Game.EzOsuGame.UserInterface
                 if (!IsLoaded)
                     return;
 
-                background.FadeColour(altHighlightActive ? colourProvider.Highlight1 : Colour4.Transparent, 200, Easing.OutQuint);
+                Colour4 backgroundColour = !altHighlightActive
+                    ? Colour4.Transparent
+                    : IsHovered
+                        ? colourProvider.Background4
+                        : colourProvider.Background3;
+
+                background.FadeColour(backgroundColour, 200, Easing.OutQuint);
                 labelText.FadeColour(altHighlightActive ? colourProvider.Content1 : colourProvider.Content2, 200, Easing.OutQuint);
-                valueText.FadeColour(colourProvider.Content1, 200, Easing.OutQuint);
             }
 
             private partial class ModeEnumPopover : OsuPopover
@@ -447,11 +458,11 @@ namespace osu.Game.EzOsuGame.UserInterface
                         new OsuMenu(Direction.Vertical, true)
                         {
                             Items = Enum.GetValues<TEnum>()
-                                .Select(mode => new OsuMenuItem(
-                                    getDisplayName(Convert.ToInt32(mode)),
-                                    MenuItemType.Standard,
-                                    () => current.Value = mode))
-                                .ToArray(),
+                                        .Select(mode => new OsuMenuItem(
+                                            getDisplayName(Convert.ToInt32(mode)),
+                                            MenuItemType.Standard,
+                                            () => current.Value = mode))
+                                        .ToArray(),
                             MaxHeight = 375,
                         },
                     };
