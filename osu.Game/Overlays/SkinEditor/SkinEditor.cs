@@ -22,7 +22,10 @@ using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
 using osu.Framework.Testing;
 using osu.Game.Database;
+using osu.Game.EzOsuGame;
+using osu.Game.EzOsuGame.Edit;
 using osu.Game.EzOsuGame.Edit.Components;
+using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.HUD;
 using osu.Game.EzOsuGame.Playback;
 using osu.Game.EzOsuGame.Screens;
@@ -178,8 +181,8 @@ namespace osu.Game.Overlays.SkinEditor
                                                     {
                                                         new EditorMenuItem(Web.CommonStrings.ButtonsSave, MenuItemType.Standard, () => Save()) { Hotkey = new Hotkey(PlatformAction.Save) },
                                                         new EditorMenuItem(CommonStrings.Export, MenuItemType.Standard, () => skins.ExportCurrentSkin()) { Action = { Disabled = !RuntimeInfo.IsDesktop } },
-                                                        editExternallyMenuItem = new EditorMenuItem(EditorStrings.EditExternally, MenuItemType.Standard, () => _ = editExternally()) { Action = { Disabled = !RuntimeInfo.IsDesktop } },
-                                                        openScriptFolderMenuItem = new EditorMenuItem("Open script folder", MenuItemType.Standard, () => _ = openScriptedSkinFolder()) { Action = { Disabled = !RuntimeInfo.IsDesktop } },
+                                                        editExternallyMenuItem = new EditorMenuItem(LocalisableString.Interpolate($@"{EditorStrings.EditExternally}..."), MenuItemType.Standard, () => _ = editExternally()) { Action = { Disabled = !RuntimeInfo.IsDesktop } },
+                                                        openScriptFolderMenuItem = new EditorMenuItem("Open folder", MenuItemType.Standard, () => _ = openScriptedSkinFolder()) { Action = { Disabled = !RuntimeInfo.IsDesktop } },
                                                         new OsuMenuItemSpacer(),
                                                         new EditorMenuItem(CommonStrings.RevertToDefault, MenuItemType.Destructive, () => dialogOverlay?.Push(new RevertConfirmDialog(RevertToDefault))),
                                                         new OsuMenuItemSpacer(),
@@ -307,6 +310,11 @@ namespace osu.Game.Overlays.SkinEditor
             // probably something which will be factored out in a future database refactor so not too concerning for now.
             currentSkin.BindValueChanged(val =>
             {
+                // Overlay can close while this component stays alive; ignore global skin changes then
+                // (e.g. Ez editor switching to Ez2Pro would otherwise flush layout onto the previous legacy skin).
+                if (State.Value != Visibility.Visible)
+                    return;
+
                 if (val.OldValue != null && HasBegunMutating)
                     SaveLayout(val.OldValue);
 
@@ -336,26 +344,33 @@ namespace osu.Game.Overlays.SkinEditor
 
         private async Task openScriptedSkinFolder()
         {
-            if (!ScriptedSkinSupport.IsScriptedSkin(currentSkin.Value.SkinInfo))
+            var info = currentSkin.Value.SkinInfo;
+            bool scripted = ScriptedSkinSupport.IsScriptedSkin(info);
+            bool folder = info.PerformRead(s => EzLegacySkinFolders.TryGetDirectory(s, out _));
+
+            if (!scripted && !folder)
                 return;
 
             Save();
 
-            string? scriptDirectory = skins.GetScriptDirectory(currentSkin.Value.SkinInfo.Value);
+            string? directory = scripted
+                ? skins.GetScriptDirectory(info.Value)
+                : info.PerformRead(s => EzLegacySkinFolders.TryGetDirectory(s, out string skinDirectory) ? skinDirectory : null);
 
-            if (string.IsNullOrEmpty(scriptDirectory))
+            if (string.IsNullOrEmpty(directory))
                 return;
 
-            externalEditOperation = await externalEditOverlay!.BeginScripted(scriptDirectory).ConfigureAwait(false);
+            externalEditOperation = await externalEditOverlay!.BeginScripted(directory).ConfigureAwait(false);
         }
 
         private void updateExternalEditMenuState()
         {
             bool isScripted = ScriptedSkinSupport.IsScriptedSkin(currentSkin.Value.SkinInfo);
+            bool isFolder = currentSkin.Value.SkinInfo.PerformRead(s => EzLegacySkinFolders.TryGetDirectory(s, out _));
             bool canRealmEdit = ScriptedSkinSupport.CanUseRealmExternalEdit(currentSkin.Value.SkinInfo);
 
             editExternallyMenuItem.Action.Disabled = !RuntimeInfo.IsDesktop || !canRealmEdit;
-            openScriptFolderMenuItem.Action.Disabled = !RuntimeInfo.IsDesktop || !isScripted;
+            openScriptFolderMenuItem.Action.Disabled = !RuntimeInfo.IsDesktop || !(isScripted || isFolder);
         }
 
         public bool OnPressed(KeyBindingPressEvent<PlatformAction> e)
@@ -416,7 +431,42 @@ namespace osu.Game.Overlays.SkinEditor
         {
         }
 
-        protected virtual void RequestClose() => skinEditorOverlay?.Hide();
+        public bool HasUnsavedLayoutChanges() =>
+            State.Value == Visibility.Visible && (changeHandler?.CanUndo.Value ?? false);
+
+        /// <summary>
+        /// Ends the session after optional save/discard confirmation (same contract as exiting to the menu).
+        /// </summary>
+        public void RequestEndSession(Action onContinued)
+        {
+            if (!HasUnsavedLayoutChanges())
+            {
+                onContinued();
+                return;
+            }
+
+            if (dialogOverlay == null)
+            {
+                Save(true);
+                HasBegunMutating = false;
+                onContinued();
+                return;
+            }
+
+            dialogOverlay.Push(new ConfirmDialog(EzEditorStrings.SWITCH_EDITOR_SAVE_OFFICIAL_LAYOUT, () =>
+            {
+                Save(true);
+                HasBegunMutating = false;
+                onContinued();
+            }, () =>
+            {
+                skins.CurrentSkinInfo.TriggerChange();
+                HasBegunMutating = false;
+                onContinued();
+            }));
+        }
+
+        protected virtual void RequestClose() => RequestEndSession(() => skinEditorOverlay?.Hide());
 
         public void UpdateTargetScreen(Drawable targetScreen)
         {
@@ -543,6 +593,9 @@ namespace osu.Game.Overlays.SkinEditor
 
         protected virtual void OnSkinChanged()
         {
+            if (State.Value != Visibility.Visible)
+                return;
+
             if (skins.EnsureMutableSkin())
                 // Another skin changed event will arrive which will complete the process.
                 return;
@@ -722,6 +775,9 @@ namespace osu.Game.Overlays.SkinEditor
 
         protected virtual void SaveLayout(Skin skin, bool userTriggered = true)
         {
+            if (!EzSkinEditorHostScope.CanWriteSkinLayout)
+                return;
+
             if (!HasBegunMutating)
                 return;
 
@@ -749,6 +805,7 @@ namespace osu.Game.Overlays.SkinEditor
         {
             base.Hide();
             SelectedComponents.Clear();
+            HasBegunMutating = false;
         }
 
         protected override void PopIn()

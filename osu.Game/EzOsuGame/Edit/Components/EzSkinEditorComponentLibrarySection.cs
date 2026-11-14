@@ -9,6 +9,7 @@ using osu.Framework.Graphics.Shapes;
 using osu.Framework.Localisation;
 using osu.Framework.Logging;
 using osu.Game.EzOsuGame.Localization;
+using osu.Game.EzOsuGame.Layout;
 using osu.Game.EzOsuGame.UserInterface;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Sprites;
@@ -141,19 +142,28 @@ namespace osu.Game.EzOsuGame.Edit.Components
             if (typeFilter?.IsExcluded(type) == true)
                 return;
 
+            if (hudLayer == null)
+                return;
+
+            EzLayoutContainer? target = hudLayer.ActiveTarget;
+            CompositeDrawable dependencySource = (CompositeDrawable?)target ?? hudLayer;
+
             try
             {
                 Drawable instance = (Drawable)Activator.CreateInstance(type)!;
+                var serialisable = (ISerialisableDrawable)instance;
 
-                if (!((ISerialisableDrawable)instance).CanBeSelected)
+                bool placeable = target == null
+                    ? serialisable.CanBeSelected
+                    : serialisable.CanBePlaced(target.Components);
+
+                if (!placeable)
                 {
                     instance.Dispose();
                     return;
                 }
 
-                // The probe instance is handed to the card and only enters the tree once the card is shown,
-                // so creating the entry does not decode anything.
-                list.Add(new ComponentPlaceButton(type, instance, hudLayer?.ActiveTarget)
+                list.Add(new ComponentPlaceButton(instance, dependencySource)
                 {
                     Action = () => place(type),
                 });
@@ -197,25 +207,20 @@ namespace osu.Game.EzOsuGame.Edit.Components
         /// and a click handler that places it into the active layer.
         /// </summary>
         /// <remarks>
-        /// The preview is a live component, so it is only materialised while the card is on screen and is
-        /// disposed once the card scrolls away or the group folds. Otherwise every available component would
-        /// stay loaded (with its textures and update loops) for the whole editor session.
+        /// Preview structure matches <see cref="SkinComponentToolbox.ToolboxComponentButton"/> so scaling
+        /// and dependency injection behave like the official skin editor toolbox.
         /// </remarks>
         private partial class ComponentPlaceButton : EzButton
         {
             private const float thumbnail_height = 72;
 
-            // Shorter than the framework default so a scrolling user sees the preview almost immediately.
-            private const double time_before_load = 200;
+            private readonly Drawable component;
 
-            // Long enough that scrolling back and forth does not rebuild the preview each time.
-            private const double time_before_unload = 2000;
+            private readonly DependencyBorrowingContainer innerContainer;
 
-            private Drawable? probePreview;
-
-            public ComponentPlaceButton(Type type, Drawable probePreview, CompositeDrawable? dependencySource)
+            public ComponentPlaceButton(Drawable component, CompositeDrawable dependencySource)
             {
-                this.probePreview = probePreview;
+                this.component = component;
 
                 RelativeSizeAxes = Axes.X;
                 Height = thumbnail_height + 24;
@@ -228,100 +233,48 @@ namespace osu.Game.EzOsuGame.Edit.Components
                     Origin = Anchor.TopCentre,
                     Masking = true,
                     Padding = new MarginPadding(8),
-                    Child = new DelayedLoadUnloadWrapper(() => new PreviewHost(type, dependencySource, takeProbePreview), time_before_load, time_before_unload)
+                    Child = innerContainer = new DependencyBorrowingContainer(component, dependencySource)
                     {
                         RelativeSizeAxes = Axes.Both,
+                        Anchor = Anchor.Centre,
+                        Origin = Anchor.Centre,
                     },
                 });
 
                 Add(new OsuSpriteText
                 {
-                    Text = type.Name,
+                    Text = component.GetType().Name,
                     Anchor = Anchor.BottomCentre,
                     Origin = Anchor.BottomCentre,
                     Font = OsuFont.Default.With(size: 12),
                 });
-            }
-
-            private Drawable? takeProbePreview()
-            {
-                Drawable? preview = probePreview;
-                probePreview = null;
-                return preview;
-            }
-
-            protected override void Dispose(bool isDisposing)
-            {
-                base.Dispose(isDisposing);
-
-                // A card disposed before ever being shown still holds the instance created for the
-                // selection check.
-                if (isDisposing)
-                    probePreview?.Dispose();
-            }
-        }
-
-        /// <summary>
-        /// Hosts the live component preview and scales it to fit. One instance per materialisation: the
-        /// wrapper disposes it, and with it the component, once the card leaves the screen.
-        /// </summary>
-        private partial class PreviewHost : Container
-        {
-            private readonly Drawable? component;
-
-            public PreviewHost(Type type, CompositeDrawable? dependencySource, Func<Drawable?> takeProbePreview)
-            {
-                RelativeSizeAxes = Axes.Both;
-
-                component = takeProbePreview() ?? createInstance(type);
-
-                if (component == null)
-                    return;
 
                 component.Anchor = Anchor.Centre;
                 component.Origin = Anchor.Centre;
-
-                Child = new DependencyBorrowingContainer(dependencySource)
-                {
-                    RelativeSizeAxes = Axes.Both,
-                    Child = component,
-                };
-            }
-
-            private static Drawable? createInstance(Type type)
-            {
-                try
-                {
-                    return (Drawable)Activator.CreateInstance(type)!;
-                }
-                catch (Exception e)
-                {
-                    Logger.Error(e, $"Ez skin component {type} could not be previewed in the library");
-                    return null;
-                }
             }
 
             protected override void UpdateAfterChildren()
             {
                 base.UpdateAfterChildren();
 
-                if (component == null)
-                    return;
-
-                // A component with a zero-size axis (not yet laid out, or scrolled out of view and
-                // culled) would otherwise divide to infinity. Guard every axis, not just the vector.
-                if (!float.IsFinite(DrawWidth) || !float.IsFinite(DrawHeight)
-                    || !float.IsFinite(component.DrawWidth) || !float.IsFinite(component.DrawHeight)
-                    || DrawWidth <= 0 || DrawHeight <= 0
-                    || component.DrawWidth <= 0 || component.DrawHeight <= 0)
+                if (component.DrawSize != Vector2.Zero)
                 {
-                    return;
+                    float bestScale = Math.Min(
+                        innerContainer.DrawWidth / component.DrawWidth,
+                        innerContainer.DrawHeight / component.DrawHeight);
+
+                    innerContainer.Scale = new Vector2(bestScale);
                 }
+            }
 
-                float bestScale = Math.Min(DrawWidth / component.DrawWidth, DrawHeight / component.DrawHeight);
+            protected override void Dispose(bool isDisposing)
+            {
+                // Parent dispose already releases a preview that was added as a child. Disposing it again
+                // runs component Dispose before the base IsDisposed guard and cancels a disposed token.
+                if (isDisposing && component.Parent == null)
+                    component.Dispose();
 
-                if (float.IsFinite(bestScale) && bestScale > 0)
-                    component.Scale = new Vector2(bestScale);
+                base.Dispose(isDisposing);
             }
         }
 
@@ -331,11 +284,41 @@ namespace osu.Game.EzOsuGame.Edit.Components
         /// </summary>
         private partial class DependencyBorrowingContainer : Container
         {
+            private readonly Drawable preview;
+
             private readonly CompositeDrawable? donor;
 
-            public DependencyBorrowingContainer(CompositeDrawable? donor)
+            public DependencyBorrowingContainer(Drawable preview, CompositeDrawable? donor)
             {
+                this.preview = preview;
                 this.donor = donor;
+            }
+
+            [BackgroundDependencyLoader]
+            private void load()
+            {
+                if (donor == null)
+                    return;
+
+                // A preview that cannot resolve its dependencies must not fail the button load,
+                // or one missing dependency removes the whole library entry.
+                try
+                {
+                    LoadComponent(preview);
+                }
+                catch (Exception e) when (SkinEditorPreviewDependencies.IsUnplaceable(e))
+                {
+                    preview.Dispose();
+                    return;
+                }
+                catch (Exception e)
+                {
+                    Logger.Log($"Ez skin component {preview.GetType().Name} preview could not be loaded ({e.GetType().Name}).");
+                    preview.Dispose();
+                    return;
+                }
+
+                Child = preview;
             }
 
             protected override bool ShouldBeConsideredForInput(Drawable child) => false;
@@ -347,11 +330,17 @@ namespace osu.Game.EzOsuGame.Edit.Components
             protected override IReadOnlyDependencyContainer CreateChildDependencies(IReadOnlyDependencyContainer parent)
             {
                 var baseDependencies = base.CreateChildDependencies(parent);
-
-                if (donor?.Dependencies == null)
+                if (donor == null)
                     return baseDependencies;
 
-                return new DependencyContainer(donor.Dependencies);
+                var dependencies = new DependencyContainer(donor.Dependencies);
+
+                if (baseDependencies.TryGet<global::osu.Game.Overlays.SkinEditor.SkinEditor>(out var skinEditor))
+                    dependencies.CacheAs(skinEditor);
+
+                SkinEditorPreviewDependencies.ApplyFallbacks(dependencies, donor.Dependencies);
+
+                return dependencies;
             }
         }
     }

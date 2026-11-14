@@ -25,6 +25,7 @@ using osu.Framework.Input;
 using osu.Framework.Input.Bindings;
 using osu.Framework.Input.Events;
 using osu.Framework.Input.StateChanges;
+using osu.Framework.Localisation;
 using osu.Framework.Logging;
 using osu.Framework.Screens;
 using osu.Framework.Threading;
@@ -1230,6 +1231,7 @@ namespace osu.Game.Screens.Select
 
                 // [Ez] 选歌界面的暗度由 Ez 设置「选歌界面背景暗度」独占控制，穿透材质（默认 / 亚克力 / 液态玻璃）
                 // 任一档位都走同一条路径，不再像以前那样在材质开启时借用游玩中的 DimLevel / BlurLevel。
+                // 不论材质档位都写这个回退暗度，避免它留着上一次的残留值。
                 backgroundModeBeatmap.IgnoreUserSettings.Value = true;
                 backgroundModeBeatmap.DimWhenUserSettingsIgnored.Value = songSelectBackgroundDim.Value;
 
@@ -1692,7 +1694,7 @@ namespace osu.Game.Screens.Select
 
             if (beatmap.OnlineID > 0)
             {
-                yield return new OsuMenuItem(CommonStrings.Details, MenuItemType.Standard, () => beatmapOverlay?.FetchAndShowBeatmap(beatmap.OnlineID));
+                yield return new OsuMenuItem(LocalisableString.Interpolate($@"{CommonStrings.Details}..."), MenuItemType.Standard, () => beatmapOverlay?.FetchAndShowBeatmap(beatmap.OnlineID));
 
                 if (beatmap.GetOnlineURL(api, Ruleset.Value) is string url)
                     yield return new OsuMenuItem(CommonStrings.CopyLink, MenuItemType.Standard, () => (game as OsuGame)?.CopyToClipboard(url));
@@ -1711,7 +1713,7 @@ namespace osu.Game.Screens.Select
                                        .AsEnumerable()
                                        .Select(c => new CollectionToggleMenuItem(c.ToLive(realm), beatmap)).Cast<OsuMenuItem>().ToList();
 
-            collectionItems.Add(new OsuMenuItem(CommonStrings.Manage, MenuItemType.Standard, () => manageCollectionsDialog?.Show()));
+            collectionItems.Add(new OsuMenuItem(LocalisableString.Interpolate($@"{CommonStrings.Manage}..."), MenuItemType.Standard, () => manageCollectionsDialog?.Show()));
 
             yield return new OsuMenuItem(CommonStrings.Collections) { Items = collectionItems };
         }

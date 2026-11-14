@@ -34,6 +34,7 @@ using osu.Game.Input.Bindings;
 using osu.Game.IO;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Dialog;
+using osu.Game.Overlays.SkinEditor;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Rulesets;
 using osu.Game.Screens;
@@ -103,6 +104,9 @@ namespace osu.Game.EzOsuGame.Edit
         [Resolved(canBeNull: true)]
         private INotificationOverlay? notifications { get; set; }
 
+        [Resolved(canBeNull: true)]
+        private SkinEditorOverlay? skinEditorOverlay { get; set; }
+
         [Resolved]
         private MusicController musicController { get; set; } = null!;
 
@@ -111,6 +115,9 @@ namespace osu.Game.EzOsuGame.Edit
 
         [Resolved]
         private EzPlaybackController playback { get; set; } = null!;
+
+        [Resolved]
+        private EzLayoutThemeHost layoutThemeHost { get; set; } = null!;
 
         private DependencyContainer dependencies = null!;
         private Container gameplayHole = null!;
@@ -209,11 +216,37 @@ namespace osu.Game.EzOsuGame.Edit
 
         public void Deactivate()
         {
-            persistEditorConfig();
             hudLayer.DetachLiveTargets();
         }
 
-        public void RequestCloseFromUser() => tryExit();
+        public void RequestCloseFromUser() => RequestEndSession(() => RequestClose?.Invoke());
+
+        public void RequestEndSession(Action onContinued)
+        {
+            if (!hasUnsavedWorkspaceChanges())
+            {
+                persistEditorConfig();
+                onContinued();
+                return;
+            }
+
+            if (dialogOverlay == null)
+            {
+                applySettings();
+                onContinued();
+                return;
+            }
+
+            dialogOverlay.Push(new ConfirmDialog(EzEditorStrings.EXIT_CONFIRM_APPLY_TO_SKIN, () =>
+            {
+                applySettings();
+                onContinued();
+            }, () =>
+            {
+                discardWorkspaceChanges();
+                onContinued();
+            }));
+        }
 
         public void SetSceneHost(Drawable? host)
         {
@@ -300,6 +333,7 @@ namespace osu.Game.EzOsuGame.Edit
                                     {
                                         Name = @"Menu container",
                                         RelativeSizeAxes = Axes.X,
+                                        // Smaller depth draws in front. The menu and its open dropdown must stay above the workspace.
                                         Depth = float.MinValue,
                                         Height = osu.Game.Overlays.SkinEditor.SkinEditor.MENU_HEIGHT,
                                         Children = new Drawable[]
@@ -307,7 +341,7 @@ namespace osu.Game.EzOsuGame.Edit
                                             menuBar = new EzSkinEditorMenuBar
                                             {
                                                 ApplyAction = applySettings,
-                                                ExitAction = tryExit,
+                                                ExitAction = RequestCloseFromUser,
                                                 CreateEzSkinJsonAction = createEzSkinJson,
                                                 UpdateEzSkinJsonSnapshotAction = updateEzSkinJsonSnapshot,
                                                 RemoveEzSkinJsonAction = removeEzSkinJson,
@@ -341,6 +375,11 @@ namespace osu.Game.EzOsuGame.Edit
                                                 CanCut = () => hudLayer.SelectedComponents.Count > 0,
                                                 CanCopy = () => hudLayer.SelectedComponents.Count > 0,
                                                 CanPaste = () => hudLayer.CanPaste,
+                                                ExportLayoutPackAction = exportLayoutPack,
+                                                ImportLayoutPackAction = importLayoutPack,
+                                                ExportCurrentLayoutLayerAction = exportCurrentLayoutLayer,
+                                                ImportCurrentLayoutLayerAction = importCurrentLayoutLayer,
+                                                CanImportExportCurrentLayoutLayer = canImportExportCurrentLayoutLayer,
                                             },
                                             // Ez-only (official menu has skin dropdown alone). Right→left: skin, mode, progress+play.
                                             new FillFlowContainer
@@ -382,6 +421,8 @@ namespace osu.Game.EzOsuGame.Edit
                                     sceneBar = new EzSkinEditorSceneBar
                                     {
                                         RelativeSizeAxes = Axes.X,
+                                        // In front of the workspace row so a scrolling sidebar cannot paint over these controls.
+                                        Depth = -1,
                                         GroupRequested = requestSceneGroup,
                                         OpenOfficialHudEditorRequested = () => OpenOfficialHudEditor?.Invoke(),
                                     },
@@ -429,6 +470,13 @@ namespace osu.Game.EzOsuGame.Edit
             };
 
             dependencies.CacheAs(sceneBar);
+            cacheSkinEditorForToolboxPreviews();
+        }
+
+        private void cacheSkinEditorForToolboxPreviews()
+        {
+            if (skinEditorOverlay?.ToolboxSkinEditor is global::osu.Game.Overlays.SkinEditor.SkinEditor official)
+                dependencies.CacheAs(official);
         }
 
         protected override void LoadComplete()
@@ -651,6 +699,9 @@ namespace osu.Game.EzOsuGame.Edit
 
         private void applySettings()
         {
+            if (!EzSkinEditorHostScope.CanWriteSkinLayout)
+                return;
+
             ezSkinConfig.Save();
             hudLayer.PersistAllLayouts();
 
@@ -887,6 +938,146 @@ namespace osu.Game.EzOsuGame.Edit
             EzSkinJsonBridge.Apply(EzSkinJsonDocument.Parse(json), ezSkinConfig);
             postNotification(EzEditorStrings.NOTIFY_IMPORTED_FROM_SKIN_TO_MEMORY);
             refreshScene();
+        }
+
+        private bool canImportExportCurrentLayoutLayer() =>
+            EzSkinEditorSceneRegistry.SupportsHudLayer(sceneBar.CurrentScene.Value)
+            && hudLayer.ActiveTarget != null;
+
+        private void exportLayoutPack()
+        {
+            try
+            {
+                var exportStorage = (storage as OsuStorage)?.GetExportStorage() ?? storage.GetStorageForDirectory(@"exports");
+                string path = EzLayoutPackIO.ExportPack(storage, layoutThemeHost.CurrentSetName, exportStorage);
+                postNotification(LocalisableString.Format(EzEditorStrings.NOTIFY_EXPORTED_TO, path));
+
+                if (RuntimeInfo.IsDesktop)
+                    host.OpenFileExternally(path + Path.DirectorySeparatorChar);
+            }
+            catch (Exception e)
+            {
+                postNotification(LocalisableString.Format(EzEditorStrings.NOTIFY_EXPORT_FAILED, e.Message));
+            }
+        }
+
+        private void importLayoutPack()
+        {
+            if (dialogOverlay == null)
+            {
+                postNotification(EzEditorStrings.NOTIFY_FILE_SELECTOR_NOT_SUPPORTED);
+                return;
+            }
+
+            dialogOverlay.Push(new EzLayoutThemeImportDialog(beginLayoutPackImport));
+        }
+
+        private void beginLayoutPackImport(string themeSuffix)
+        {
+            if (string.IsNullOrWhiteSpace(themeSuffix))
+            {
+                postNotification(EzEditorStrings.NOTIFY_LAYOUT_THEME_NAME_REQUIRED);
+                return;
+            }
+
+            var selector = host.CreateSystemFileSelector(new[] { ".json" });
+
+            if (selector == null)
+            {
+                postNotification(EzEditorStrings.NOTIFY_FILE_SELECTOR_NOT_SUPPORTED);
+                return;
+            }
+
+            selector.Selected += file =>
+            {
+                try
+                {
+                    string? directory = Path.GetDirectoryName(file.FullName);
+
+                    if (string.IsNullOrEmpty(directory))
+                        throw new InvalidOperationException("Missing directory");
+
+                    string setName = EzLayoutPackIO.ImportPackFromDirectory(storage, directory, themeSuffix);
+                    EzLayoutSetCandidates.Refresh(storage);
+                    layoutThemeHost.SelectSet(setName);
+                    postNotification(EzEditorStrings.NOTIFY_LAYOUT_IMPORTED_PACK);
+                }
+                catch (Exception e)
+                {
+                    postNotification(LocalisableString.Format(EzEditorStrings.NOTIFY_IMPORT_FAILED, e.Message));
+                }
+                finally
+                {
+                    selector.Dispose();
+                }
+            };
+
+            selector.Present();
+        }
+
+        private void exportCurrentLayoutLayer()
+        {
+            var target = hudLayer.ActiveTarget;
+
+            if (target == null)
+            {
+                postNotification(EzEditorStrings.NOTIFY_LAYOUT_NO_CURRENT_LAYER);
+                return;
+            }
+
+            try
+            {
+                hudLayer.PersistLayoutToCurrentSkin();
+                var exportStorage = (storage as OsuStorage)?.GetExportStorage() ?? storage.GetStorageForDirectory(@"exports");
+                string path = EzLayoutPackIO.ExportLayerJson(storage, layoutThemeHost.Store, target.LayoutFile, exportStorage);
+                postNotification(LocalisableString.Format(EzEditorStrings.NOTIFY_EXPORTED_TO, path));
+            }
+            catch (Exception e)
+            {
+                postNotification(LocalisableString.Format(EzEditorStrings.NOTIFY_EXPORT_FAILED, e.Message));
+            }
+        }
+
+        private void importCurrentLayoutLayer()
+        {
+            var target = hudLayer.ActiveTarget;
+
+            if (target == null)
+            {
+                postNotification(EzEditorStrings.NOTIFY_LAYOUT_NO_CURRENT_LAYER);
+                return;
+            }
+
+            var selector = host.CreateSystemFileSelector(new[] { ".json" });
+
+            if (selector == null)
+            {
+                postNotification(EzEditorStrings.NOTIFY_FILE_SELECTOR_NOT_SUPPORTED);
+                return;
+            }
+
+            string layoutFile = target.LayoutFile;
+
+            selector.Selected += file =>
+            {
+                try
+                {
+                    EzLayoutPackIO.ImportLayerJson(storage, layoutThemeHost.Store, layoutFile, file.FullName);
+                    target.LoadFromStore();
+                    hudLayer.ChangeHandler?.SaveState();
+                    postNotification(EzEditorStrings.NOTIFY_LAYOUT_IMPORTED_LAYER);
+                }
+                catch (Exception e)
+                {
+                    postNotification(LocalisableString.Format(EzEditorStrings.NOTIFY_IMPORT_FAILED, e.Message));
+                }
+                finally
+                {
+                    selector.Dispose();
+                }
+            };
+
+            selector.Present();
         }
 
         private void importJson()
@@ -1135,9 +1326,16 @@ namespace osu.Game.EzOsuGame.Edit
             {
                 try
                 {
-                    string? directory = ScriptedSkinSupport.IsScriptedSkin(skinInfo)
-                        ? skinManager.GetScriptDirectory(skinInfo.Value)
-                        : null;
+                    string? directory = null;
+
+                    skinInfo.PerformRead(s =>
+                    {
+                        if (EzLegacySkinFolders.TryGetDirectory(s, out string folder))
+                            directory = folder;
+                    });
+
+                    if (directory == null && ScriptedSkinSupport.IsScriptedSkin(skinInfo))
+                        directory = skinManager.GetScriptDirectory(skinInfo.Value);
 
                     ExternalEditOperation<SkinInfo>? edit = null;
 
@@ -1227,25 +1425,19 @@ namespace osu.Game.EzOsuGame.Edit
                 : new EzStyleProSkin(skinManager);
         }
 
-        public void ShowExitDialog() => tryExit();
+        public void ShowExitDialog() => RequestCloseFromUser();
 
-        private void tryExit()
+        private bool hasUnsavedWorkspaceChanges() =>
+            SkinIniSession.IsDirty
+            || (hudLayer.ChangeHandler?.CanUndo.Value ?? false)
+            || (SkinJsonSession?.IsDirty(ezSkinConfig) ?? false);
+
+        private void discardWorkspaceChanges()
         {
-            if (dialogOverlay == null || !SkinIniSession.IsDirty)
-            {
-                RequestClose?.Invoke();
-                return;
-            }
-
-            dialogOverlay.Push(new ConfirmDialog(EzEditorStrings.EXIT_CONFIRM_APPLY_TO_SKIN, () =>
-            {
-                applySettings();
-                RequestClose?.Invoke();
-            }, () =>
-            {
+            if (SkinIniSession.IsDirty)
                 SkinIniSession.Discard();
-                RequestClose?.Invoke();
-            }));
+
+            skinManager.CurrentSkinInfo.TriggerChange();
         }
 
         private static ISkinComponentLookup? tryCreateManiaSkinComponentLookupOrNull(string componentName)
@@ -1268,6 +1460,17 @@ namespace osu.Game.EzOsuGame.Edit
             {
                 return null;
             }
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            if (isDisposing)
+            {
+                foreach (var strategy in EzSkinEditorSceneRegistry.All)
+                    strategy.ReleaseCachedDrawables();
+            }
+
+            base.Dispose(isDisposing);
         }
     }
 }

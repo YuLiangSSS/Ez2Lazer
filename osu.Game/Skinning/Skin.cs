@@ -22,9 +22,11 @@ using osu.Framework.Logging;
 using osu.Game.Audio;
 using osu.Game.Beatmaps.Formats;
 using osu.Game.Database;
+using osu.Game.EzOsuGame;
 using osu.Game.IO;
 using osu.Game.Rulesets;
 using osu.Game.Screens.Play.HUD;
+using osu.Game.Utils;
 using osuTK.Graphics;
 
 namespace osu.Game.Skinning
@@ -76,6 +78,25 @@ namespace osu.Game.Skinning
 
         public string Name { get; }
 
+        /// <summary>
+        /// Image filenames this skin exposes to the skin editor.
+        /// Realm skins read <see cref="SkinInfo.Files"/>; folder skins enumerate their directory.
+        /// </summary>
+        public virtual IEnumerable<string> UserFileNames
+        {
+            get
+            {
+                if (EzLegacySkinFolders.TryGetDirectory(SkinInfo.Value, out string directory))
+                    return EzLegacySkinFolders.ImageFileNames(directory).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+                return SkinInfo.PerformRead(skin => skin.Files
+                                                        .Where(f => SupportedExtensions.IMAGE_EXTENSIONS.Contains(Path.GetExtension(f.Filename).ToLowerInvariant()))
+                                                        .Select(f => f.Filename)
+                                                        .Distinct()
+                                                        .ToArray());
+            }
+        }
+
         protected IResourceStore<byte[]>? FallbackStore { get; }
 
         /// <summary>
@@ -124,19 +145,24 @@ namespace osu.Game.Skinning
 
             if (configurationStream != null)
             {
+                var decoder = new LegacySkinDecoder();
+
+                Configuration = decoder.CreateTemplateObject();
+
+                SetDefaultConfiguration();
+
                 // stream will be closed after use by LineBufferedReader.
-                ParseConfigurationStream(configurationStream);
-                Debug.Assert(Configuration != null);
+                ParseConfigurationStream(decoder, configurationStream);
             }
             else
             {
                 Configuration = new SkinConfiguration
                 {
-                    // generally won't be hit as we always write a `skin.ini` on import, but best be safe than sorry.
-                    // see https://github.com/peppy/osu-stable-reference/blob/1531237b63392e82c003c712faa028406073aa8f/osu!/Graphics/Skinning/SkinManager.cs#L297-L298
                     LegacyVersion = SkinConfiguration.LATEST_VERSION,
                     IsLatestVersion = true,
                 };
+
+                SetDefaultConfiguration();
             }
 
             // skininfo files may be null for default skin.
@@ -164,6 +190,13 @@ namespace osu.Game.Skinning
                     Logger.Error(ex, "Failed to load skin configuration.");
                 }
             }
+        }
+
+        /// <summary>
+        /// Called during skin construction to set any defaults *before* user configuration is parsed.
+        /// </summary>
+        protected virtual void SetDefaultConfiguration()
+        {
         }
 
         /// <summary>
@@ -203,10 +236,10 @@ namespace osu.Game.Skinning
         protected virtual IResourceStore<TextureUpload> CreateTextureLoaderStore(IStorageResourceProvider resources, IResourceStore<byte[]> storage)
             => new MaxDimensionLimitedTextureLoaderStore(resources.CreateTextureLoaderStore(storage));
 
-        protected virtual void ParseConfigurationStream(Stream stream)
+        protected virtual void ParseConfigurationStream(LegacySkinDecoder decoder, Stream stream)
         {
             using (LineBufferedReader reader = new LineBufferedReader(stream, true))
-                Configuration = new LegacySkinDecoder().Decode(reader);
+                decoder.DecodeInto(reader, Configuration);
         }
 
         /// <summary>

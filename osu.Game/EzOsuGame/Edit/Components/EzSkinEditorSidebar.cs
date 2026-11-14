@@ -50,6 +50,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
         private EzSkinEditorSidebarGroupRail rail = null!;
         private OsuScrollContainer contentScroll = null!;
         private FillFlowContainer contentFlow = null!;
+        private SettingsCheckbox pinSwitch = null!;
         private readonly List<EzSkinEditorSettingsGroup> groupDrawables = new List<EzSkinEditorSettingsGroup>();
 
         private IEzSkinEditorSceneStrategy? shownStrategy;
@@ -113,6 +114,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
         public EzSkinEditorSidebar()
         {
             RelativeSizeAxes = Axes.Y;
+            Depth = -1;
             // 占位宽度由 ReservedWidth 驱动（固定+展开时为面板+轨，其余为 0）；面板 BypassAutoSize
             // 并向左悬停，不撑大自身宽度。
             Width = 0;
@@ -140,6 +142,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
                     Margin = new MarginPadding { Right = EzVerticalRail.WIDTH },
                     RelativeSizeAxes = Axes.Y,
                     Width = CONTENT_WIDTH,
+                    Masking = true,
                     BypassAutoSizeAxes = Axes.Both,
                     Children = new Drawable[]
                     {
@@ -151,6 +154,7 @@ namespace osu.Game.EzOsuGame.Edit.Components
                         contentScroll = new OsuScrollContainer
                         {
                             RelativeSizeAxes = Axes.Both,
+                            Masking = true,
                             ScrollbarVisible = false,
                             Margin = new MarginPadding { Bottom = 10 },
                             Child = contentFlow = new FillFlowContainer
@@ -160,6 +164,14 @@ namespace osu.Game.EzOsuGame.Edit.Components
                                 Direction = FillDirection.Vertical,
                                 Spacing = new Vector2(0, 20),
                                 Padding = new MarginPadding(padding),
+                                Children = new Drawable[]
+                                {
+                                    pinSwitch = new SettingsCheckbox
+                                    {
+                                        LabelText = EzEditorStrings.SIDEBAR_PIN_LABEL,
+                                        Current = Pinned,
+                                    },
+                                },
                             },
                         },
                         footerContainer = new Container
@@ -202,12 +214,6 @@ namespace osu.Game.EzOsuGame.Edit.Components
                 contentPanel.FadeTo(v.NewValue ? 1 : 0, transition_duration, Easing.OutQuint);
                 updateReservedWidth();
             }, true);
-
-            contentFlow.Add(new SettingsCheckbox
-            {
-                LabelText = EzEditorStrings.SIDEBAR_PIN_LABEL,
-                Current = Pinned,
-            });
         }
 
         /// <summary>
@@ -296,6 +302,8 @@ namespace osu.Game.EzOsuGame.Edit.Components
                 contentFlow.Add(section);
             }
 
+            ensurePinSwitchAtTop();
+
             navigation.ShowSections(strategy.SceneType, groupDrawables);
             navigation.SuspendSync();
             Scheduler.AddOnce(navigation.ResumeSync);
@@ -313,6 +321,14 @@ namespace osu.Game.EzOsuGame.Edit.Components
             }
             else
                 clearFooter();
+        }
+
+        private void ensurePinSwitchAtTop()
+        {
+            if (pinSwitch.Parent != contentFlow)
+                return;
+
+            contentFlow.SetLayoutPosition(pinSwitch, 0);
         }
 
         private void detachSections()

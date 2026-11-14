@@ -49,6 +49,9 @@ namespace osu.Game.Overlays.SkinEditor
 
         protected SkinEditor? Editor;
 
+        /// <summary>Official skin editor instance when loaded; used by Ez workspace for toolbox previews.</summary>
+        internal SkinEditor? ToolboxSkinEditor => Editor;
+
         [Resolved]
         private IPerformFromScreenRunner? performer { get; set; }
 
@@ -64,8 +67,8 @@ namespace osu.Game.Overlays.SkinEditor
         [Resolved]
         private OsuGame? game { get; set; }
 
-        [Resolved]
-        private EzSkinEditorOverlay ezSkinEditor { get; set; } = null!;
+        [Resolved(canBeNull: true)]
+        private EzSkinEditorOverlay? ezSkinEditor { get; set; }
 
         [Resolved]
         private MusicController music { get; set; } = null!;
@@ -136,6 +139,7 @@ namespace osu.Game.Overlays.SkinEditor
 
         protected override void PopIn()
         {
+            EzSkinEditorHostScope.Enter(EzSkinEditorHostScope.Host.OfficialHud);
             OnEditorOpening();
             overrideSkinEditorRelevantSettings();
 
@@ -184,15 +188,77 @@ namespace osu.Game.Overlays.SkinEditor
             nestedInputManagerDisable = null;
 
             restoreSkinEditorRelevantSettings();
+            EzSkinEditorHostScope.Exit(EzSkinEditorHostScope.Host.OfficialHud);
         }
 
         /// <summary>
         /// 关闭官方 HUD 编辑器并打开 Ez 皮肤编辑器盖层（缩放插拔当前屏，不 Push）。
         /// </summary>
+        public void RequestEndEditorSession(Action onContinued)
+        {
+            if (State.Value != Visibility.Visible || Editor == null)
+            {
+                onContinued();
+                return;
+            }
+
+            Editor.RequestEndSession(onContinued);
+        }
+
+        public override void Show()
+        {
+            if (State.Value == Visibility.Visible)
+                return;
+
+            if (ezSkinEditor?.State.Value == Visibility.Visible && ezSkinEditor.Workspace != null)
+            {
+                EzSkinEditorHostScope.BeginTransition();
+                ezSkinEditor.Workspace.RequestEndSession(() =>
+                {
+                    try
+                    {
+                        ezSkinEditor.Hide();
+                        base.Show();
+                    }
+                    finally
+                    {
+                        EzSkinEditorHostScope.EndTransition();
+                    }
+                });
+                return;
+            }
+
+            base.Show();
+        }
+
         public void ToggleEzSkinEditor()
         {
-            Hide();
-            ezSkinEditor.Toggle();
+            if (ezSkinEditor == null)
+                return;
+
+            void openEzEditor()
+            {
+                try
+                {
+                    if (State.Value == Visibility.Visible)
+                        Hide();
+
+                    ezSkinEditor.Toggle();
+                }
+                finally
+                {
+                    EzSkinEditorHostScope.EndTransition();
+                }
+            }
+
+            if (State.Value != Visibility.Visible || Editor == null)
+            {
+                openEzEditor();
+                return;
+            }
+
+            EzSkinEditorHostScope.BeginTransition();
+            Editor.RequestEndSession(openEzEditor);
         }
 
         public void PresentGameplay() => presentGameplay(false);
