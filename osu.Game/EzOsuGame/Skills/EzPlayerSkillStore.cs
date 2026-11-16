@@ -10,7 +10,6 @@ using osu.Game.EzOsuGame.Analysis;
 using osu.Game.EzOsuGame.LocalProfile;
 using osu.Game.EzOsuGame.Skills.Dan;
 using osu.Game.EzOsuGame.Skills.Mina;
-using osu.Game.EzOsuGame.Skills.Pattern;
 
 namespace osu.Game.EzOsuGame.Skills
 {
@@ -100,7 +99,11 @@ namespace osu.Game.EzOsuGame.Skills
             });
         }
 
-        public EzPlayerRatingSnapshot GetPlayerSsrSnapshot(string username, int keyCount, int? algorithmVersion = null)
+        /// <summary>
+        /// Aggregated player Mina rating skills (MinaCalc rating axes). Stored under <see cref="EzAnalysisSystem.Mina"/>,
+        /// not chart <see cref="EzAnalysisSystem.SSR"/> (Sunny).
+        /// </summary>
+        public EzMinaPlayerSkillSnapshot GetPlayerMinaSkillAxisSnapshot(string username, int keyCount, int? algorithmVersion = null)
         {
             int version = algorithmVersion ?? EzMinaEngine.VERSION;
 
@@ -110,11 +113,11 @@ namespace osu.Game.EzOsuGame.Skills
                 var values = readValues(c, query);
 
                 if (values.Count == 0)
-                    return new EzPlayerRatingSnapshot();
+                    return new EzMinaPlayerSkillSnapshot();
 
                 var (plays, provisional) = readMeta(c, query);
 
-                return new EzPlayerRatingSnapshot
+                return new EzMinaPlayerSkillSnapshot
                 {
                     Values = values,
                     AnalyzedPlays = plays,
@@ -155,7 +158,8 @@ namespace osu.Game.EzOsuGame.Skills
             });
         }
 
-        public IReadOnlyList<int> GetPlayerSsrKeyCounts(string username, int? algorithmVersion = null)
+        /// <inheritdoc cref="GetPlayerMinaSkillAxisSnapshot"/>
+        public IReadOnlyList<int> GetPlayerRatingKeyCounts(string username, int? algorithmVersion = null)
         {
             int version = algorithmVersion ?? EzMinaEngine.VERSION;
 
@@ -204,10 +208,13 @@ namespace osu.Game.EzOsuGame.Skills
                 toRows(skills, analyzedPlays, provisional, version, at), version));
         }
 
-        public void WritePlayerSsr(
+        /// <summary>
+        /// Writes player Mina rating skill rows only (see <see cref="GetPlayerMinaSkillAxisSnapshot"/>).
+        /// </summary>
+        public void WritePlayerRatingSkills(
             string username,
             int keyCount,
-            EzMinaSkillAxisVector vector,
+            EzMinaSkillAxisData vector,
             int analyzedPlays,
             bool provisional = false,
             DateTimeOffset? computedAt = null,
@@ -219,81 +226,82 @@ namespace osu.Game.EzOsuGame.Skills
             database.Write((c, tx) =>
             {
                 replaceValues(c, tx, username, keyCount, EzAnalysisSystem.Mina.ToStorageId(), EzLocalProfileConstants.MANIA_RULESET_ID,
-                    toRows(ssrValues(vector), analyzedPlays, provisional, version, at), version);
+                    toRows(playerMinaSkillRowValues(vector), analyzedPlays, provisional, version, at), version);
 
                 if (appendHistory)
-                    insertHistory(c, tx, username, keyCount, ssrValues(vector), at, version);
+                    insertHistory(c, tx, username, keyCount, playerMinaSkillRowValues(vector), at, version);
             });
         }
 
         /// <summary>
-        /// Write one player × keymode's SunnySR values, history samples and pattern ratings in a single transaction.
+        /// Write one player × keymode's Mina rating skills, history samples and pattern ratings in a single transaction.
         /// </summary>
         public void WritePlayerSkillBundle(
             string username,
             int keyCount,
-            EzMinaSkillAxisVector ssr,
+            EzMinaSkillAxisData minaRating,
             int analyzedPlays,
             bool provisional,
-            IReadOnlyList<(DateTimeOffset RecordedAt, EzMinaSkillAxisVector Vector)> historySamples,
-            IReadOnlyList<EzPatternRating> patternRatings)
+            IReadOnlyList<(DateTimeOffset RecordedAt, EzMinaSkillAxisData Vector)> historySamples,
+            IReadOnlyList<EzMinaPlayerSkillTagPlayData> skillRatings)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(username);
             ArgumentNullException.ThrowIfNull(historySamples);
-            ArgumentNullException.ThrowIfNull(patternRatings);
+            ArgumentNullException.ThrowIfNull(skillRatings);
 
             DateTimeOffset at = DateTimeOffset.UtcNow;
-            const int version = EzMinaEngine.VERSION;
+            const int minaVersion = EzMinaEngine.VERSION;
+            const int tagVersion = EzMinaPlayerSkillModeData.VERSION;
 
             database.Write((c, tx) =>
             {
                 replaceValues(c, tx, username, keyCount, EzAnalysisSystem.Mina.ToStorageId(), EzLocalProfileConstants.MANIA_RULESET_ID,
-                    toRows(ssrValues(ssr), analyzedPlays, provisional, version, at), version);
+                    toRows(playerMinaSkillRowValues(minaRating), analyzedPlays, provisional, minaVersion, at), minaVersion);
 
-                replaceHistory(c, tx, username, keyCount, historySamples, version);
+                replaceHistory(c, tx, username, keyCount, historySamples, minaVersion);
 
                 replaceValues(c, tx, username, keyCount, EzAnalysisSystem.Pattern.ToStorageId(), -1,
-                    toRows(patternValues(patternRatings), analyzedPlays, provisional, version, at), version);
+                    toRows(patternValues(skillRatings), analyzedPlays, provisional, tagVersion, at), tagVersion);
             });
         }
 
-        public IReadOnlyList<EzPatternRating> GetPlayerPatternRatings(string username, int keyCount, int? algorithmVersion = null)
+        public IReadOnlyList<EzMinaPlayerSkillTagPlayData> GetPlayerSkillRatings(string username, int keyCount, int? algorithmVersion = null)
         {
-            int version = algorithmVersion ?? EzPatternRatings.VERSION;
+            int version = algorithmVersion ?? EzMinaPlayerSkillModeData.VERSION;
 
             return database.Read(c =>
             {
                 using var cmd = c.CreateCommand();
                 cmd.CommandText = """
-                                  SELECT skill_id, value, analyzed_plays FROM player_skill_value
+                                  SELECT skill_id, skill_value, analyzed_plays FROM player_skill_value
                                   WHERE username = $username AND key_count = $key_count
                                     AND system_id = $system AND algorithm_version = $version
-                                  ORDER BY value DESC;
+                                  ORDER BY skill_value DESC;
                                   """;
                 cmd.Parameters.AddWithValue("$username", username);
                 cmd.Parameters.AddWithValue("$key_count", keyCount);
                 cmd.Parameters.AddWithValue("$system", EzAnalysisSystem.Pattern.ToStorageId());
                 cmd.Parameters.AddWithValue("$version", version);
 
-                var list = new List<EzPatternRating>();
+                var list = new List<EzMinaPlayerSkillTagPlayData>();
                 using var reader = cmd.ExecuteReader();
 
                 while (reader.Read())
                 {
-                    if (!EzPatternRatings.TryParseSkillId(reader.GetString(0), out string patternId))
+                    if (!EzMinaPlayerSkillModeData.TryParseSkillId(reader.GetString(0), out string patternId))
                         continue;
 
-                    list.Add(new EzPatternRating(patternId, reader.GetDouble(1), reader.GetInt32(2)));
+                    list.Add(new EzMinaPlayerSkillTagPlayData(patternId, reader.GetDouble(1), reader.GetInt32(2)));
                 }
 
-                return (IReadOnlyList<EzPatternRating>)list;
+                return (IReadOnlyList<EzMinaPlayerSkillTagPlayData>)list;
             });
         }
 
         public IReadOnlyList<EzPlayerSkillHistorySample> GetPlayerSkillHistory(string username, int keyCount, string skillId, int maxPoints = 64)
             => database.Read(c => readHistory(c, username, keyCount, skillId, maxPoints));
 
-        public void ReplacePlayerSkillHistory(string username, int keyCount, IReadOnlyList<(DateTimeOffset RecordedAt, EzMinaSkillAxisVector Vector)> samples)
+        public void ReplacePlayerSkillHistory(string username, int keyCount, IReadOnlyList<(DateTimeOffset RecordedAt, EzMinaSkillAxisData Vector)> samples)
         {
             const int version = EzMinaEngine.VERSION;
 
@@ -610,7 +618,7 @@ namespace osu.Game.EzOsuGame.Skills
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = $"""
-                               SELECT skill_id, value FROM player_skill_value
+                               SELECT skill_id, skill_value FROM player_skill_value
                                WHERE username = $username AND key_count = $key_count
                                  AND system_id = $system AND algorithm_version = $version
                                  {(query.RulesetOnlineId >= 0 ? "AND ruleset_online_id = $ruleset" : string.Empty)};
@@ -711,10 +719,10 @@ namespace osu.Game.EzOsuGame.Skills
                 ins.Transaction = transaction;
                 ins.CommandText = """
                                   INSERT OR REPLACE INTO player_skill_value
-                                      (username, key_count, system_id, ruleset_online_id, skill_id, value, state,
+                                      (username, key_count, system_id, ruleset_online_id, skill_id, skill_value, state,
                                        analyzed_plays, provisional, algorithm_version, computed_at_ms)
                                   VALUES
-                                      ($username, $key_count, $system, $ruleset, $skill_id, $value, $state,
+                                      ($username, $key_count, $system, $ruleset, $skill_id, $skill_value, $state,
                                        $analyzed_plays, $provisional, $version, $computed_at);
                                   """;
                 ins.Parameters.AddWithValue("$username", username);
@@ -722,7 +730,7 @@ namespace osu.Game.EzOsuGame.Skills
                 ins.Parameters.AddWithValue("$system", systemId);
                 ins.Parameters.AddWithValue("$ruleset", rulesetOnlineId);
                 ins.Parameters.AddWithValue("$skill_id", row.SkillId);
-                ins.Parameters.AddWithValue("$value", row.Value);
+                ins.Parameters.AddWithValue("$skill_value", row.Value);
                 ins.Parameters.AddWithValue("$state", EzSkillRowState.Current);
                 ins.Parameters.AddWithValue("$analyzed_plays", row.AnalyzedPlays);
                 ins.Parameters.AddWithValue("$provisional", row.Provisional ? 1 : 0);
@@ -743,13 +751,13 @@ namespace osu.Game.EzOsuGame.Skills
                 using var ins = connection.CreateCommand();
                 ins.Transaction = transaction;
                 ins.CommandText = """
-                                  INSERT INTO player_skill_history (username, key_count, skill_id, value, recorded_at_ms, algorithm_version)
-                                  VALUES ($username, $key_count, $skill_id, $value, $recorded_at, $version);
+                                  INSERT INTO player_skill_history (username, key_count, skill_id, skill_value, recorded_at_ms, algorithm_version)
+                                  VALUES ($username, $key_count, $skill_id, $skill_value, $recorded_at, $version);
                                   """;
                 ins.Parameters.AddWithValue("$username", username);
                 ins.Parameters.AddWithValue("$key_count", keyCount);
                 ins.Parameters.AddWithValue("$skill_id", skillId);
-                ins.Parameters.AddWithValue("$value", value);
+                ins.Parameters.AddWithValue("$skill_value", value);
                 ins.Parameters.AddWithValue("$recorded_at", at.ToUnixTimeMilliseconds());
                 ins.Parameters.AddWithValue("$version", version);
                 ins.ExecuteNonQuery();
@@ -760,7 +768,7 @@ namespace osu.Game.EzOsuGame.Skills
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
-                              SELECT value, recorded_at_ms, algorithm_version FROM player_skill_history
+                              SELECT skill_value, recorded_at_ms, algorithm_version FROM player_skill_history
                               WHERE username = $username AND key_count = $key_count AND skill_id = $skill_id
                               ORDER BY recorded_at_ms DESC
                               LIMIT $limit;
@@ -786,7 +794,7 @@ namespace osu.Game.EzOsuGame.Skills
         }
 
         private static void replaceHistory(SqliteConnection connection, SqliteTransaction transaction, string username, int keyCount,
-                                           IReadOnlyList<(DateTimeOffset RecordedAt, EzMinaSkillAxisVector Vector)> samples, int version)
+                                           IReadOnlyList<(DateTimeOffset RecordedAt, EzMinaSkillAxisData Vector)> samples, int version)
         {
             deleteRows(connection, transaction, "player_skill_history", "username = $username AND key_count = $key_count",
                 cmd =>
@@ -796,7 +804,7 @@ namespace osu.Game.EzOsuGame.Skills
                 });
 
             foreach (var (recordedAt, vector) in samples)
-                insertHistory(connection, transaction, username, keyCount, ssrValues(vector), recordedAt, version);
+                insertHistory(connection, transaction, username, keyCount, playerMinaSkillRowValues(vector), recordedAt, version);
         }
 
         private static void writeDanEstimate(SqliteConnection connection, SqliteTransaction transaction, EzPlayerDanEstimateRow estimate)
@@ -848,22 +856,22 @@ namespace osu.Game.EzOsuGame.Skills
             return rows;
         }
 
-        private static IReadOnlyDictionary<string, double> ssrValues(EzMinaSkillAxisVector vector)
+        private static IReadOnlyDictionary<string, double> playerMinaSkillRowValues(EzMinaSkillAxisData vector)
         {
             var values = new Dictionary<string, double>(StringComparer.Ordinal);
 
             foreach (var (axis, value) in vector.Enumerate())
-                values[axis.ToSsrSkillId()] = value;
+                values[axis.ToMetaId()] = value;
 
             return values;
         }
 
-        private static IReadOnlyDictionary<string, double> patternValues(IReadOnlyList<EzPatternRating> ratings)
+        private static IReadOnlyDictionary<string, double> patternValues(IReadOnlyList<EzMinaPlayerSkillTagPlayData> ratings)
         {
             var values = new Dictionary<string, double>(ratings.Count, StringComparer.Ordinal);
 
             foreach (var rating in ratings)
-                values[EzPatternRatings.ToSkillId(rating.Id)] = rating.Rating;
+                values[EzMinaPlayerSkillModeData.ToSkillId(rating.SkillId)] = rating.SkillRating;
 
             return values;
         }

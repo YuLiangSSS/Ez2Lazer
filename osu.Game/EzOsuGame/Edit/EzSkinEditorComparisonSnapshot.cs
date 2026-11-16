@@ -8,8 +8,8 @@ using osu.Game.EzOsuGame.Configuration;
 namespace osu.Game.EzOsuGame.Edit
 {
     /// <summary>
-    /// In-memory skin editor configuration snapshot for preview comparison and control reset baselines.
-    /// Covers <see cref="EzSkinJsonSettingCatalog"/> (Ez2Config) and <see cref="EzSkinIniFieldCatalog"/> (skin.ini draft).
+    /// 皮肤编辑器内存快照（Ez 配置 + skin.ini 草稿）。可有多份实例：一份供菜单「配置快照」与左右对比；
+    /// 另一份在 <see cref="EzSkinEditorScreen"/> 作本会话 Apply 锚点（退出放弃）。不因类型不同而语义变化。
     /// Does not include RulesetConfig, ScriptedSkin, or Note edit session state.
     /// Not persisted to disk — navigation triggers <see cref="Ez2ConfigManager"/> save separately.
     /// </summary>
@@ -37,6 +37,12 @@ namespace osu.Game.EzOsuGame.Edit
         /// </summary>
         public Colour4 NotePreviewColour { get; private set; } = Colour4.White;
 
+        public EzColouringMode NotePreviewColouringMode { get; private set; } = EzColouringMode.True;
+
+        public EzColouringRange NotePreviewColouringRange { get; private set; } = EzColouringRange.Gray;
+
+        public double NotePreviewColouringStrength { get; private set; }
+
         public void CaptureFrom(Ez2ConfigManager config, EzSkinIniSession? skinIniSession = null)
         {
             Document = EzSkinJsonBridge.Capture(config);
@@ -48,11 +54,16 @@ namespace osu.Game.EzOsuGame.Edit
             NotePreviewColour = config.Get<bool>(Ez2Setting.ColorSettingsEnabled)
                 ? config.GetColumnColorByType(EzColumnType.A)
                 : Colour4.White;
+            NotePreviewColouringMode = config.Get<EzColouringMode>(Ez2Setting.ColouringMode);
+            NotePreviewColouringRange = config.Get<EzColouringRange>(Ez2Setting.ColouringRange);
+            NotePreviewColouringStrength = config.Get<double>(Ez2Setting.ColouringStrength);
         }
+
+        public void ApplyConfigTo(Ez2ConfigManager config) => EzSkinJsonBridge.Apply(Document, config);
 
         public void ApplyTo(Ez2ConfigManager config, EzSkinIniSession? skinIniSession = null)
         {
-            EzSkinJsonBridge.Apply(Document, config);
+            ApplyConfigTo(config);
 
             if (SkinIniDraftText != null && skinIniSession is { IsSupported: true })
                 skinIniSession.SetDraftText(SkinIniDraftText);

@@ -10,6 +10,7 @@ using osu.Game.Beatmaps;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Edit.Settings;
 using osu.Game.EzOsuGame.Layout;
+using osu.Game.EzOsuGame.Skinning;
 using osu.Game.Graphics;
 using osu.Game.Rulesets.Mania.Edit;
 using osu.Game.Rulesets.Mania.Skinning;
@@ -67,6 +68,12 @@ namespace osu.Game.Rulesets.Mania.UI
         /// </summary>
         public bool DisplayTintActive => DivisorNoteColouringEnabled || ColumnNoteColouringEnabled;
 
+        public EzColouringMode ColouringMode => colouringMode?.Value ?? EzColouringMode.True;
+
+        public EzColouringRange ColouringRange => colouringRange?.Value ?? EzColouringRange.Gray;
+
+        public float ColouringStrength => (float)(colouringStrength?.Value ?? 0);
+
         public bool IsEditorCompose => editorBeatmap != null;
 
         [Resolved]
@@ -78,8 +85,8 @@ namespace osu.Game.Rulesets.Mania.UI
         [Resolved]
         private OsuColour colours { get; set; } = null!;
 
-        [Resolved]
-        private IBeatmap beatmap { get; set; } = null!;
+        [Resolved(CanBeNull = true)]
+        private IBeatmap? beatmap { get; set; }
 
         [Resolved(CanBeNull = true)]
         private EditorBeatmap? editorBeatmap { get; set; }
@@ -95,9 +102,13 @@ namespace osu.Game.Rulesets.Mania.UI
         private Bindable<bool> gameplayDivisorNoteColouring = null!;
         private Bindable<bool> colorSettingsEnabled = null!;
         private Bindable<bool> builtInColourTemplate = null!;
-        private Bindable<EzColouringMode> colouringMode = null!;
+        private Bindable<EzColouringMode>? colouringMode;
+        private Bindable<EzColouringRange>? colouringRange;
+        private Bindable<double>? colouringStrength;
         private Action<ValueChangedEvent<bool>>? onDisplaySettingsChanged;
         private Action<ValueChangedEvent<EzColouringMode>>? onColouringModeChanged;
+        private Action<ValueChangedEvent<EzColouringRange>>? onColouringRangeChanged;
+        private Action<ValueChangedEvent<double>>? onColouringStrengthChanged;
 
         private readonly Dictionary<long, int> lineDivisorBySnapMs = new Dictionary<long, int>();
         private readonly Dictionary<int, Color4> tintByLineDivisor = new Dictionary<int, Color4>();
@@ -126,23 +137,21 @@ namespace osu.Game.Rulesets.Mania.UI
             return Color4.White;
         }
 
+        public void ApplyDisplayColour(Drawable target, ManiaNoteDisplayColourPart part, Column column, double startTime)
+            => EzNoteRecolour.ApplyToDrawable(target, GetDisplayColour(part, column, startTime), ColouringMode, ColouringRange, ColouringStrength);
+
+        /// <summary>
+        /// 列色或节拍线着色任一开着即用白底贴图乘色。命中靶贴图与此一致，但 <see cref="GetDisplayColour"/> 对靶不吃节拍线时刻色。
+        /// </summary>
         public bool UseTintBaseTexture(ManiaNoteDisplayColourPart part, Column column)
             => AllowsDisplayColour(part) && DisplayTintActive;
 
         public string GetEzProTextureColourPrefix(ManiaNoteDisplayColourPart part, Column column)
         {
             if (UseTintBaseTexture(part, column))
-                return "white";
+                return EzColumnResourceLookup.TINT_BASE_TEXTURE_AFFIX;
 
-            return column.EzNoteTypeBindable.Value switch
-            {
-                EzColumnType.A => "white",
-                EzColumnType.B => "blue",
-                EzColumnType.S => "green",
-                EzColumnType.E => "white",
-                EzColumnType.P => "green",
-                _ => "white",
-            };
+            return EzColumnResourceLookup.EzProNoteTexturePrefix(column.EzNoteTypeBindable.Value);
         }
 
         public static bool AllowsDisplayColour(ManiaNoteDisplayColourPart part) => part switch
@@ -167,6 +176,8 @@ namespace osu.Game.Rulesets.Mania.UI
             colorSettingsEnabled = ezConfig.GetBindable<bool>(Ez2Setting.ColorSettingsEnabled);
             builtInColourTemplate = ezConfig.GetBindable<bool>(Ez2Setting.ManiaSkipEmptyEdgeColumns);
             colouringMode = ezConfig.GetBindable<EzColouringMode>(Ez2Setting.ColouringMode);
+            colouringRange = ezConfig.GetBindable<EzColouringRange>(Ez2Setting.ColouringRange);
+            colouringStrength = ezConfig.GetBindable<double>(Ez2Setting.ColouringStrength);
             applyColumnNoteColouring();
             applyBuiltInLayoutTemplate();
 
@@ -176,6 +187,10 @@ namespace osu.Game.Rulesets.Mania.UI
 
             onColouringModeChanged = syncColouringMode;
             colouringMode.BindValueChanged(onColouringModeChanged);
+            onColouringRangeChanged = _ => Changed?.Invoke();
+            colouringRange.BindValueChanged(onColouringRangeChanged);
+            onColouringStrengthChanged = _ => Changed?.Invoke();
+            colouringStrength.BindValueChanged(onColouringStrengthChanged);
 
             paletteBinding = new ManiaEditorDivisorPaletteBinding(configStore);
             onPaletteChanged = invalidateTintColours;
@@ -207,8 +222,14 @@ namespace osu.Game.Rulesets.Mania.UI
                     builtInColourTemplate.ValueChanged -= onDisplaySettingsChanged;
                 }
 
-                if (onColouringModeChanged != null)
+                if (onColouringModeChanged != null && colouringMode != null)
                     colouringMode.ValueChanged -= onColouringModeChanged;
+
+                if (onColouringRangeChanged != null && colouringRange != null)
+                    colouringRange.ValueChanged -= onColouringRangeChanged;
+
+                if (onColouringStrengthChanged != null && colouringStrength != null)
+                    colouringStrength.ValueChanged -= onColouringStrengthChanged;
             }
 
             base.Dispose(isDisposing);
@@ -247,6 +268,9 @@ namespace osu.Game.Rulesets.Mania.UI
 
         private Color4 getNoteTint(double startTime)
         {
+            if (beatmap == null)
+                return Color4.White;
+
             refreshGridStateIfNeeded();
 
             ManiaEditorBeatLinePalette palette = configStore.BeatmapEditor.Colouring.BeatLines;
@@ -266,7 +290,7 @@ namespace osu.Game.Rulesets.Mania.UI
 
             if (!tintByLineDivisor.TryGetValue(lineDivisor, out Color4 tint))
             {
-                tint = ManiaNoteDisplayColour.ForBeatLineDisplayColour(lineDivisor, colours, palette, colouringMode.Value);
+                tint = ManiaNoteDisplayColour.ForBeatLineDisplayColour(lineDivisor, colours, palette, ColouringMode);
                 tintByLineDivisor[lineDivisor] = tint;
             }
 
@@ -292,7 +316,7 @@ namespace osu.Game.Rulesets.Mania.UI
             if (IsEditorCompose)
                 return beatDivisor?.Value ?? 4;
 
-            return beatmap.BeatmapInfo.BeatDivisor;
+            return beatmap?.BeatmapInfo.BeatDivisor ?? 4;
         }
 
         private void invalidateLineDivisors()

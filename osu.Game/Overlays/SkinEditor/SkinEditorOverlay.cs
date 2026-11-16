@@ -21,6 +21,7 @@ using osu.Game.Beatmaps;
 using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.EzOsuGame.Edit;
+using osu.Game.EzOsuGame.Localization;
 using osu.Game.Graphics.Containers;
 using osu.Game.Input.Bindings;
 using osu.Game.Rulesets;
@@ -126,7 +127,7 @@ namespace osu.Game.Overlays.SkinEditor
                     if (Editor?.State.Value != Visibility.Visible)
                         break;
 
-                    Hide();
+                    Editor.RequestEndSession(Hide);
                     return true;
             }
 
@@ -182,7 +183,17 @@ namespace osu.Game.Overlays.SkinEditor
 
         protected override void PopOut()
         {
-            Editor?.Save(false);
+            if (Editor != null)
+            {
+                bool hadUnsaved = Editor.HasUnsavedLayoutChanges();
+                Editor.Save(false);
+
+                if (hadUnsaved && Editor.LastLayoutSaveAttempted && !Editor.LastLayoutSaveSucceeded)
+                    Editor.PostLayoutNotice(EzEditorStrings.NOTIFY_SKIN_LAYOUT_EXIT_SAVE_FAILED);
+                else if (hadUnsaved && !Editor.LastLayoutSaveAttempted)
+                    Editor.PostLayoutNotice(EzEditorStrings.NOTIFY_SKIN_LAYOUT_EXIT_CONTAINERS_LOADING);
+            }
+
             Editor?.Hide();
             nestedInputManagerDisable?.Dispose();
             nestedInputManagerDisable = null;
@@ -573,6 +584,8 @@ namespace osu.Game.Overlays.SkinEditor
 
         private partial class EndlessPlayer : ReplayPlayer
         {
+            private bool awaitingLoopRewind;
+
             protected override UserActivity? InitialActivity => null;
 
             public override bool DisallowExternalBeatmapRulesetChanges => true;
@@ -603,8 +616,20 @@ namespace osu.Game.Overlays.SkinEditor
                 if (!LoadedBeatmapSuccessfully)
                     return;
 
-                if (GameplayState.HasPassed)
-                    GameplayClockContainer.Seek(0);
+                if (awaitingLoopRewind)
+                {
+                    if (!GameplayState.HasPassed)
+                        awaitingLoopRewind = false;
+
+                    return;
+                }
+
+                if (!GameplayState.HasPassed)
+                    return;
+
+                awaitingLoopRewind = true;
+                GameplayState.HasPassed = false;
+                GameplayClockContainer.Seek(0);
             }
         }
     }

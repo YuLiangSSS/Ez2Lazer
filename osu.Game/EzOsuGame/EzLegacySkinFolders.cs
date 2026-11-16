@@ -29,6 +29,11 @@ namespace osu.Game.EzOsuGame
         private const string meta_filename = "skininfo.json";
         private const string migration_marker = ".migrated";
 
+        public static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+        public static string StripUtf8Bom(string text) =>
+            text.Length > 0 && text[0] == '\uFEFF' ? text[1..] : text;
+
         private static readonly string legacy_instantiation = typeof(LegacySkin).GetInvariantInstantiationInfo();
 
         public static string? RootDirectory { get; private set; }
@@ -230,10 +235,10 @@ namespace osu.Game.EzOsuGame
             string path = Path.Combine(directory, "skin.ini");
 
             using var stream = new MemoryStream();
-            using (var writer = new StreamWriter(stream, Encoding.UTF8, 1024, leaveOpen: true))
+            using (var writer = new StreamWriter(stream, Utf8NoBom, 1024, leaveOpen: true))
                 new LegacySkinEncoder(skin).Encode(writer);
 
-            writeIfDifferent(path, Encoding.UTF8.GetString(stream.ToArray()));
+            writeIfDifferent(path, Utf8NoBom.GetString(stream.ToArray()));
         }
 
         public static string? Rename(SkinInfo info, string newName, IStorageResourceProvider resources)
@@ -454,8 +459,36 @@ namespace osu.Game.EzOsuGame
         private static bool isMigratable(SkinInfo skin) =>
             string.IsNullOrEmpty(skin.InstantiationInfo) || skin.InstantiationInfo == legacy_instantiation;
 
+        private static void promoteLayoutLayersIfPresent(string directory)
+        {
+            string nested = Path.Combine(directory, "layout-layers");
+
+            if (!Directory.Exists(nested))
+                return;
+
+            try
+            {
+                foreach (string source in Directory.EnumerateFiles(nested, "*.json"))
+                {
+                    string fileName = Path.GetFileName(source);
+                    string destination = Path.Combine(directory, fileName);
+
+                    if (File.Exists(destination))
+                        continue;
+
+                    File.Move(source, destination);
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Error(e, $"无法把 layout-layers 中的布局 JSON 提升到皮肤根目录：{directory}");
+            }
+        }
+
         private static SkinInfo createInfo(string folderName, string directory)
         {
+            promoteLayoutLayersIfPresent(directory);
+
             (string iniName, string iniCreator) = readIni(directory);
             FolderMeta? meta = readMeta(directory);
 
@@ -811,7 +844,7 @@ namespace osu.Game.EzOsuGame
                 if (File.Exists(path) && File.ReadAllText(path) == contents)
                     return false;
 
-                File.WriteAllText(path, contents, Encoding.UTF8);
+                File.WriteAllText(path, contents, Utf8NoBom);
                 return true;
             }
             catch (Exception e)

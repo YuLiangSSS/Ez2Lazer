@@ -20,6 +20,7 @@ using osu.Framework.Input;
 using osu.Framework.Input.Bindings;
 using osu.Framework.Input.Events;
 using osu.Framework.Localisation;
+using osu.Framework.Logging;
 using osu.Framework.Testing;
 using osu.Game.Database;
 using osu.Game.EzOsuGame;
@@ -36,6 +37,7 @@ using osu.Game.Graphics.UserInterface;
 using osu.Game.Input.Bindings;
 using osu.Game.Localisation;
 using osu.Game.Overlays.Dialog;
+using osu.Game.Overlays.Notifications;
 using osu.Game.Overlays.OSD;
 using osu.Game.Overlays.Settings;
 using osu.Game.Screens.Edit;
@@ -98,6 +100,7 @@ namespace osu.Game.Overlays.SkinEditor
         private EzEditorSettingsSidebar settingsSidebar = null!;
 
         private SkinEditorChangeHandler? changeHandler;
+        private bool layoutDirty;
         private readonly IBindableList<ISerialisableDrawable> components = new BindableList<ISerialisableDrawable>();
 
         private EditorMenuItem undoMenuItem = null!;
@@ -117,6 +120,9 @@ namespace osu.Game.Overlays.SkinEditor
 
         [Resolved]
         private IDialogOverlay? dialogOverlay { get; set; }
+
+        [Resolved]
+        private INotificationOverlay? notifications { get; set; }
 
         [Resolved]
         private ExternalEditOverlay? externalEditOverlay { get; set; }
@@ -315,10 +321,11 @@ namespace osu.Game.Overlays.SkinEditor
                 if (State.Value != Visibility.Visible)
                     return;
 
-                if (val.OldValue != null && HasBegunMutating)
-                    SaveLayout(val.OldValue);
+                if (val.OldValue != null && HasUnsavedLayoutChanges())
+                    TrySaveLayout(val.OldValue);
 
                 HasBegunMutating = false;
+                layoutDirty = false;
                 Scheduler.AddOnce(OnSkinChanged);
             }, true);
 
@@ -335,7 +342,8 @@ namespace osu.Game.Overlays.SkinEditor
             if (!ScriptedSkinSupport.CanUseRealmExternalEdit(currentSkin.Value.SkinInfo))
                 return;
 
-            Save();
+            if (HasUnsavedLayoutChanges())
+                Save();
 
             var skin = currentSkin.Value.SkinInfo.PerformRead(s => s.Detach());
 
@@ -350,8 +358,6 @@ namespace osu.Game.Overlays.SkinEditor
 
             if (!scripted && !folder)
                 return;
-
-            Save();
 
             string? directory = scripted
                 ? skins.GetScriptDirectory(info.Value)
@@ -432,7 +438,7 @@ namespace osu.Game.Overlays.SkinEditor
         }
 
         public bool HasUnsavedLayoutChanges() =>
-            State.Value == Visibility.Visible && (changeHandler?.CanUndo.Value ?? false);
+            State.Value == Visibility.Visible && layoutDirty;
 
         /// <summary>
         /// Ends the session after optional save/discard confirmation (same contract as exiting to the menu).
@@ -460,6 +466,7 @@ namespace osu.Game.Overlays.SkinEditor
                 onContinued();
             }, () =>
             {
+                layoutDirty = false;
                 skins.CurrentSkinInfo.TriggerChange();
                 HasBegunMutating = false;
                 onContinued();
@@ -577,7 +584,13 @@ namespace osu.Game.Overlays.SkinEditor
             void bindSkinnableContainer(SkinnableContainer skinnableContainer)
             {
                 changeHandler = new SkinEditorChangeHandler(skinnableContainer);
-                changeHandler.CanUndo.BindValueChanged(v => undoMenuItem.Action.Disabled = !v.NewValue, true);
+                changeHandler.CanUndo.BindValueChanged(v =>
+                {
+                    undoMenuItem.Action.Disabled = !v.NewValue;
+
+                    if (v.NewValue)
+                        layoutDirty = true;
+                }, true);
                 changeHandler.CanRedo.BindValueChanged(v => redoMenuItem.Action.Disabled = !v.NewValue, true);
 
                 components.UnbindBindings();
@@ -617,8 +630,6 @@ namespace osu.Game.Overlays.SkinEditor
 
                 if (targetContainer != null)
                     changeHandler = new SkinEditorChangeHandler(targetContainer);
-
-                HasBegunMutating = true;
 
                 // Reload sidebar components.
                 SelectedTarget.TriggerChange();
@@ -767,34 +778,78 @@ namespace osu.Game.Overlays.SkinEditor
 
         void IEditorChangeHandler.RestoreState(int direction) => changeHandler?.RestoreState(direction);
 
+        public void PostLayoutNotice(LocalisableString text) =>
+            notifications?.Post(new SimpleNotification { Text = text });
+
         public void Save(bool userTriggered = true)
         {
             if (currentSkin.IsNotNull())
-                SaveLayout(currentSkin.Value, userTriggered);
+                TrySaveLayout(currentSkin.Value, userTriggered);
         }
 
-        protected virtual void SaveLayout(Skin skin, bool userTriggered = true)
-        {
-            if (!EzSkinEditorHostScope.CanWriteSkinLayout)
-                return;
+        /// <summary>
+        /// Whether a layout save was attempted during the last <see cref="TrySaveLayout"/> call.
+        /// </summary>
+        public bool LastLayoutSaveAttempted { get; private set; }
 
-            if (!HasBegunMutating)
-                return;
+        /// <summary>
+        /// Whether the last <see cref="TrySaveLayout"/> call wrote skin layout files.
+        /// </summary>
+        public bool LastLayoutSaveSucceeded { get; private set; }
+
+        /// <summary>
+        /// Persists in-memory layout from loaded containers into <paramref name="skin"/> without writing to disk.
+        /// </summary>
+        protected void PersistInMemoryLayout(Skin skin)
+        {
+            foreach (var target in AvailableTargets)
+            {
+                if (target.ComponentsLoaded)
+                    skin.UpdateDrawableTarget(target);
+            }
+        }
+
+        /// <returns>Whether layout files were written.</returns>
+        protected bool TrySaveLayout(Skin skin, bool userTriggered = false)
+        {
+            LastLayoutSaveAttempted = false;
+            LastLayoutSaveSucceeded = false;
+
+            if (!EzSkinEditorHostScope.CanWriteSkinLayout)
+                return false;
+
+            if (!userTriggered && !HasUnsavedLayoutChanges())
+                return false;
 
             if (TargetScreen?.IsLoaded != true)
-                return;
+                return false;
 
-            SkinnableContainer[] targetContainers = AvailableTargets.ToArray();
+            SkinnableContainer? target = GetTarget(SelectedTarget.Value) ?? GetFirstTarget();
 
-            if (!targetContainers.All(c => c.ComponentsLoaded))
-                return;
+            if (target == null)
+                return false;
 
-            foreach (var t in targetContainers)
-                skin.UpdateDrawableTarget(t);
+            if (!target.ComponentsLoaded)
+            {
+                if (userTriggered)
+                    Logger.Log(EzEditorStrings.NOTIFY_SKIN_LAYOUT_SAVE_CONTAINERS_LOADING, LoggingTarget.Runtime, LogLevel.Important);
 
-            // In the case the save was user triggered, always show the save message to make them feel confident.
-            if (skins.Save(skin) || userTriggered)
+                return false;
+            }
+
+            LastLayoutSaveAttempted = true;
+            PersistInMemoryLayout(skin);
+
+            bool saved = skins.Save(skin);
+            LastLayoutSaveSucceeded = saved;
+
+            if (saved)
+                layoutDirty = false;
+
+            if (saved || userTriggered)
                 onScreenDisplay?.Display(new SkinEditorToast(ToastStrings.SkinSaved, skin.SkinInfo.ToString() ?? "Unknown"));
+
+            return saved;
         }
 
         protected override bool OnHover(HoverEvent e) => true;
@@ -925,7 +980,7 @@ namespace osu.Game.Overlays.SkinEditor
             game?.UnregisterImportHandler(this);
         }
 
-        protected partial class SkinEditorToast : Toast
+        public partial class SkinEditorToast : Toast
         {
             public SkinEditorToast(LocalisableString value, string skinDisplayName)
                 : base(SkinSettingsStrings.SkinLayoutEditor, value)

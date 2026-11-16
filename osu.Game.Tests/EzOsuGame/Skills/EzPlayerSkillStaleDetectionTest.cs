@@ -43,7 +43,7 @@ namespace osu.Game.Tests.EzOsuGame.Skills
             RunTestWithRealm((_, storage) =>
             {
                 var store = new EzPlayerSkillStore(storage);
-                store.WritePlayerSsr("ledger-user", 4, new EzMinaSkillAxisVector(10, 1, 2, 3, 4, 5, 6, 7), analyzedPlays: 1);
+                store.WritePlayerRatingSkills("ledger-user", 4, new EzMinaSkillAxisData(10, 1, 2, 3, 4, 5, 6, 7), analyzedPlays: 1);
 
                 for (int i = 0; i < 3; i++)
                     insertDrillRow(storage, "ledger-user", keyCount: 4);
@@ -66,7 +66,7 @@ namespace osu.Game.Tests.EzOsuGame.Skills
             using var cmd = connection.CreateCommand();
             cmd.CommandText = """
                               INSERT INTO player_skill_value
-                                  (username, key_count, system_id, ruleset_online_id, skill_id, value, state, analyzed_plays,
+                                  (username, key_count, system_id, ruleset_online_id, skill_id, skill_value, state, analyzed_plays,
                                    provisional, algorithm_version, computed_at_ms)
                               VALUES
                                   ($username, 4, $system, $ruleset, 'overall', 10, 0, $plays, 0, $version, $at);

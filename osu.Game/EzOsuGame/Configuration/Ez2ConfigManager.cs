@@ -74,7 +74,8 @@ namespace osu.Game.EzOsuGame.Configuration
 
         public Ez2ConfigManager(Storage storage)
             : base(storage)
-        { }
+        {
+        }
 
         protected override void PerformLoad()
         {
@@ -195,6 +196,7 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.SkinEditorHudSnapDistance, 20, 10, 50, 5);
             SetDefault(Ez2Setting.SkinEditorHudSnapPixelFlush, false);
             SetDefault(Ez2Setting.SkinEditorComponentPickerX, 0.5f);
+            SetDefault(Ez2Setting.SkinEditorColouringPreviewerX, 0f);
 
             SetDefault(Ez2Setting.EzAnalysisFilter, false);
             SetDefault(Ez2Setting.EzSelectCsMode, string.Empty);
@@ -271,7 +273,9 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.ColumnBlur, 0.3, 0.0, 1, 0.01);
 
             SetDefault(Ez2Setting.ColorSettingsEnabled, true);
-            SetDefault(Ez2Setting.ColouringMode, EzColouringMode.Direct);
+            SetDefault(Ez2Setting.ColouringMode, EzColouringMode.True);
+            SetDefault(Ez2Setting.ColouringRange, EzColouringRange.Gray);
+            SetDefault(Ez2Setting.ColouringStrength, 0.0, 0.0, 255.0, 1.0);
             SetDefault(Ez2Setting.ColumnTypeA, Colour4.FromHex("#F5F5F5"));
             SetDefault(Ez2Setting.ColumnTypeB, Colour4.FromHex("#648FFF"));
             SetDefault(Ez2Setting.ColumnTypeS, Colour4.FromHex("#FF4A4A"));
@@ -743,6 +747,18 @@ namespace osu.Game.EzOsuGame.Configuration
         {
             if (runtime_column_data.TryGetValue(keyMode, out var data))
                 return data;
+
+            if (!key_mode_to_column_color_setting.ContainsKey(keyMode))
+            {
+                byte[] typesBytes = new byte[keyMode];
+
+                for (int i = 0; i < keyMode; i++)
+                    typesBytes[i] = getDefaultColumnTypeByte(keyMode, i);
+
+                data = createRuntimeData(typesBytes);
+                runtime_column_data[keyMode] = data;
+                return data;
+            }
 
             return buildKeyModeColumnDataFromSetting(keyMode);
         }
@@ -1360,6 +1376,12 @@ namespace osu.Game.EzOsuGame.Configuration
         /// </summary>
         SkinEditorComponentPickerX,
 
+        /// <summary>
+        /// Remembered horizontal position of the colouring previewer as a fraction of its free travel
+        /// (0 = left edge, 1 = right edge). Resolution-independent so it survives window resizes.
+        /// </summary>
+        SkinEditorColouringPreviewerX,
+
         EzAnalysisFilter,
 
         EzSelectCsMode,
@@ -1383,7 +1405,7 @@ namespace osu.Game.EzOsuGame.Configuration
 
         // 皮肤与舞台资源
         ColumnWidthStyle,
-        HitPositionGlobalEnable, // 未来要考虑，是否统一成，整套系统套用在传统皮肤上，变成切换设置
+        HitPositionGlobalEnable,
 
         /// <summary>
         /// When enabled, switching skins applies per-skin EzSkin.json to in-memory Ez config only.
@@ -1478,6 +1500,16 @@ namespace osu.Game.EzOsuGame.Configuration
         /// 着色算法。所有走列色 / 节拍线色的着色点共用；只改颜色计算，不改贴图选择。
         /// </summary>
         ColouringMode,
+
+        /// <summary>
+        /// 着色范围。与 <see cref="ColouringMode"/> 正交：全体 / 仅灰度 / 保白 / 仅白色。
+        /// </summary>
+        ColouringRange,
+
+        /// <summary>
+        /// 仅白色：离纯白的 8-bit 软衰减。0 只染纯白；255 按白量满范围混色。
+        /// </summary>
+        ColouringStrength,
 
         ColumnDim,
         ColumnBlur,

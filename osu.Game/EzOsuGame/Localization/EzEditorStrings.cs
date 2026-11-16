@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using osu.Framework.Localisation;
+using osu.Game.EzOsuGame.Edit;
 
 namespace osu.Game.EzOsuGame.Localization
 {
@@ -15,13 +16,23 @@ namespace osu.Game.EzOsuGame.Localization
 
         public static readonly LocalisableString SETTINGS_SKIN_EDITOR_BUTTON_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
             "此编辑器中的HUD均修改Ez布局图层，不会修改皮肤HUD图层"
-            + "\n主题 HUD 布局存于 EzResources/Config/layout 与 layout-{主题} 文件夹",
+            + "\n主题 HUD 布局存于 EzResources/Config/layout 与 layout-{主题} 文件夹"
+            + "\n音乐播放器 HUD 存于 EzResources/Config（全局，不随主题切换）",
             "Editor HUDs in this editor modify the Ez layout layer, not the skin HUD layer"
-            + "\nThemed HUD layouts live under EzResources/Config/layout and layout-{theme} folders");
+            + "\nThemed HUD layouts live under EzResources/Config/layout and layout-{theme} folders"
+            + "\nMusic player HUD lives under EzResources/Config (client-wide, not theme-switched)");
 
-        public static readonly LocalisableString LAYOUT_SAVED = new EzLocalizationManager.EzLocalisableString(
-            "布局已保存",
-            "Layout saved");
+        public static readonly EzLocalizationManager.EzLocalisableString NOTIFY_SKIN_LAYOUT_EXIT_SAVE_FAILED = new EzLocalizationManager.EzLocalisableString(
+            "皮肤 HUD 布局未写入磁盘，请退出前再试保存。",
+            "Skin HUD layout was not written to disk. Try saving again before exiting.");
+
+        public static readonly EzLocalizationManager.EzLocalisableString NOTIFY_SKIN_LAYOUT_EXIT_CONTAINERS_LOADING = new EzLocalizationManager.EzLocalisableString(
+            "皮肤 HUD 容器仍在加载，未写入布局。",
+            "Skin HUD layout was not written because skinnable containers were still loading.");
+
+        public static readonly EzLocalizationManager.EzLocalisableString NOTIFY_SKIN_LAYOUT_SAVE_CONTAINERS_LOADING = new EzLocalizationManager.EzLocalisableString(
+            "HUD 容器仍在加载，已跳过保存。",
+            "Skipped saving skin HUD layout because skinnable containers are still loading.");
 
         public static readonly LocalisableString SETTINGS_AUTO_APPLY_SKIN_JSON = new EzLocalizationManager.EzLocalisableString(
             "自动切换皮肤配置",
@@ -289,6 +300,42 @@ namespace osu.Game.EzOsuGame.Localization
             "应用更改到皮肤？",
             "Apply changes to skin?");
 
+        public static readonly LocalisableString EXIT_CONFIRM_APPLY_UNSAVED = new EzLocalizationManager.EzLocalisableString(
+            "应用未保存的更改？",
+            "Apply unsaved changes?");
+
+        public static readonly EzLocalizationManager.EzLocalisableString EXIT_CONFIRM_MODIFIED = new EzLocalizationManager.EzLocalisableString(
+            "当前已修改：{0}",
+            "Currently modified: {0}");
+
+        public static readonly LocalisableString LAYER_SKIN_JSON = new EzLocalizationManager.EzLocalisableString(
+            "EzSkin.json",
+            "EzSkin.json");
+
+        public static readonly LocalisableString LAYER_SKIN_INI = new EzLocalizationManager.EzLocalisableString(
+            "skin.ini",
+            "skin.ini");
+
+        public static readonly LocalisableString TOAST_LAYOUT_SAVED = new EzLocalizationManager.EzLocalisableString(
+            "已保存",
+            "Saved");
+
+        public static readonly LocalisableString TOAST_HEADER_SKIN_LAYOUT = new EzLocalizationManager.EzLocalisableString(
+            "皮肤布局",
+            "Skin layout");
+
+        public static readonly LocalisableString TOAST_HEADER_THEME_LAYOUT = new EzLocalizationManager.EzLocalisableString(
+            "主题布局",
+            "Theme layout");
+
+        public static readonly LocalisableString TOAST_HEADER_CLIENT_LAYOUT = new EzLocalizationManager.EzLocalisableString(
+            "全局布局",
+            "Client layout");
+
+        public static readonly LocalisableString TOAST_HEADER_LAYOUT = new EzLocalizationManager.EzLocalisableString(
+            "布局",
+            "Layout");
+
         public static readonly LocalisableString SWITCH_EDITOR_SAVE_OFFICIAL_LAYOUT = new EzLocalizationManager.EzLocalisableString(
             "保存 HUD 布局到当前皮肤？",
             "Save HUD layout to the current skin?");
@@ -342,6 +389,12 @@ namespace osu.Game.EzOsuGame.Localization
 
         public static readonly LocalisableString LAYER_EZ_PLAYFIELD_RULESET = new EzLocalizationManager.EzLocalisableString("Ez Playfield（{0}）", "Ez Playfield ({0})");
 
+        public static readonly LocalisableString LAYER_SKIN_HUD = new EzLocalizationManager.EzLocalisableString("Skin HUD", "Skin HUD");
+
+        public static readonly LocalisableString LAYER_SKIN_HUD_RULESET = new EzLocalizationManager.EzLocalisableString("Skin HUD（{0}）", "Skin HUD ({0})");
+
+        public static readonly LocalisableString LAYER_SKIN_PLAYFIELD_RULESET = new EzLocalizationManager.EzLocalisableString("Skin Playfield（{0}）", "Skin Playfield ({0})");
+
         /// <summary>
         /// Fallback used in place of the ruleset name when no ruleset is active yet.
         /// </summary>
@@ -360,6 +413,10 @@ namespace osu.Game.EzOsuGame.Localization
         public static readonly LocalisableString TAB_NOTE = new EzLocalizationManager.EzLocalisableString("Note", "Note");
 
         public static readonly LocalisableString TAB_BEATMAP_PREVIEW = new EzLocalizationManager.EzLocalisableString("谱面预览", "Beatmap preview");
+
+        public static readonly LocalisableString TAB_RESULTS = new EzLocalizationManager.EzLocalisableString("结算界面", "Results");
+
+        public static readonly LocalisableString TAB_MUSIC_PLAYER = new EzLocalizationManager.EzLocalisableString("音乐播放器", "Music player");
 
         public static readonly LocalisableString TAB_EDITOR_COLOURING = new EzLocalizationManager.EzLocalisableString("配色", "Colouring");
 
@@ -427,8 +484,8 @@ namespace osu.Game.EzOsuGame.Localization
         public static readonly LocalisableString NOTE_TRUE_COLOURING_LABEL = new EzLocalizationManager.EzLocalisableString("真着色", "True colouring");
 
         public static readonly LocalisableString NOTE_TRUE_COLOURING_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
-            "TODO: EzNoteTrueColourProcessor",
-            "TODO: EzNoteTrueColourProcessor");
+            "打开后使用真着色（SetLum 保明度）。关闭则回到直接着色。范围仍用全局「着色范围」。",
+            "On: True colouring (SetLum, keeps luminance). Off: Direct. Range still follows the global colouring range.");
 
         public static readonly LocalisableString NOTE_WIDTH_LABEL = new EzLocalizationManager.EzLocalisableString("宽度", "Width");
 
@@ -501,11 +558,33 @@ namespace osu.Game.EzOsuGame.Localization
             "在预览中点击 HUD 组件以选中并显示设置。",
             "Click a HUD component in the preview to select it and show settings.");
 
-        public static readonly LocalisableString LIBRARY_GLOBAL_TITLE = new EzLocalizationManager.EzLocalisableString(
-            "组件库(通用)", "Component library (global)");
+        public static readonly LocalisableString LIBRARY_RAIL_COMPONENT = new EzLocalizationManager.EzLocalisableString(
+            "组件", "Parts");
 
-        public static readonly LocalisableString LIBRARY_RULESET_TITLE = new EzLocalizationManager.EzLocalisableString(
-            "组件库(模式)", "Component library (mode)");
+        public static readonly LocalisableString LIBRARY_RAIL_FAMILY_EZ = new EzLocalizationManager.EzLocalisableString("Ez", "Ez");
+        public static readonly LocalisableString LIBRARY_RAIL_FAMILY_ARGON = new EzLocalizationManager.EzLocalisableString("Argon", "Argon");
+        public static readonly LocalisableString LIBRARY_RAIL_FAMILY_LEGACY = new EzLocalizationManager.EzLocalisableString("Legacy", "Legacy");
+        public static readonly LocalisableString LIBRARY_RAIL_FAMILY_OTHER = new EzLocalizationManager.EzLocalisableString("其他", "Other");
+
+        public static LocalisableString LibraryRailFamilyName(EzHudComponentFamily family) => family switch
+        {
+            EzHudComponentFamily.Ez => LIBRARY_RAIL_FAMILY_EZ,
+            EzHudComponentFamily.Argon => LIBRARY_RAIL_FAMILY_ARGON,
+            EzHudComponentFamily.Legacy => LIBRARY_RAIL_FAMILY_LEGACY,
+            _ => LIBRARY_RAIL_FAMILY_OTHER,
+        };
+
+        public static LocalisableString LibraryPanelTitle(EzHudComponentFamily family, bool rulesetScoped) => (family, rulesetScoped) switch
+        {
+            (EzHudComponentFamily.Ez, false) => new EzLocalizationManager.EzLocalisableString("Ez HUD 组件（通用）", "Ez HUD parts (global)"),
+            (EzHudComponentFamily.Ez, true) => new EzLocalizationManager.EzLocalisableString("Ez HUD 组件（模式）", "Ez HUD parts (mode)"),
+            (EzHudComponentFamily.Argon, false) => new EzLocalizationManager.EzLocalisableString("Argon HUD 组件（通用）", "Argon HUD parts (global)"),
+            (EzHudComponentFamily.Argon, true) => new EzLocalizationManager.EzLocalisableString("Argon HUD 组件（模式）", "Argon HUD parts (mode)"),
+            (EzHudComponentFamily.Legacy, false) => new EzLocalizationManager.EzLocalisableString("Legacy HUD 组件（通用）", "Legacy HUD parts (global)"),
+            (EzHudComponentFamily.Legacy, true) => new EzLocalizationManager.EzLocalisableString("Legacy HUD 组件（模式）", "Legacy HUD parts (mode)"),
+            (_, false) => new EzLocalizationManager.EzLocalisableString("其他 HUD 组件（通用）", "Other HUD parts (global)"),
+            (_, true) => new EzLocalizationManager.EzLocalisableString("其他 HUD 组件（模式）", "Other HUD parts (mode)"),
+        };
 
         public static readonly LocalisableString LIBRARY_PLACEHOLDER = new EzLocalizationManager.EzLocalisableString(
             "请先进入 HUD 场景并选择编辑层。",
@@ -523,6 +602,18 @@ namespace osu.Game.EzOsuGame.Localization
 
         public static readonly LocalisableString TOOLBAR_VISUAL_PICKER = new EzLocalizationManager.EzLocalisableString(
             "可视化选择器", "Visual picker");
+
+        public static readonly LocalisableString TOOLBAR_COLOURING_PREVIEWER = new EzLocalizationManager.EzLocalisableString(
+            "着色预览器", "Colouring previewer");
+
+        public static readonly LocalisableString COLOURING_PREVIEWER_WINDOW_TITLE = new EzLocalizationManager.EzLocalisableString(
+            "着色预览器", "Colouring previewer");
+
+        public static readonly LocalisableString COLOURING_PREVIEWER_BASE = new EzLocalizationManager.EzLocalisableString(
+            "底图", "Base texture");
+
+        public static readonly LocalisableString COLOURING_PREVIEWER_WHITE_MAX = new EzLocalizationManager.EzLocalisableString(
+            "仅白·满", "White (max)");
 
         public static readonly LocalisableString SIDEBAR_SKIN_SCOPED_EMPTY = new EzLocalizationManager.EzLocalisableString(
             "当前皮肤没有专用设置。",

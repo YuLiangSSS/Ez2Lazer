@@ -40,7 +40,7 @@ namespace osu.Game.EzOsuGame.Edit
                 if (!EzSkinJsonSettingCatalog.Contains(setting))
                     continue;
 
-                tryApplySetting(config, setting, pair.Value);
+                tryApplySetting(config, setting, normalizeStoredValue(setting, pair.Value));
             }
         }
 
@@ -60,7 +60,7 @@ namespace osu.Game.EzOsuGame.Edit
                 if (!EzSkinJsonSettingCatalog.Contains(setting))
                     continue;
 
-                syncBindableDefault(config, setting, pair.Value);
+                syncBindableDefault(config, setting, normalizeStoredValue(setting, pair.Value));
             }
         }
 
@@ -79,7 +79,7 @@ namespace osu.Game.EzOsuGame.Edit
 
             // Parse into a detached instance of the same bindable type. Parsing on the live bindable would write the value first and restore it
             // afterwards, firing ValueChanged (and background saves) for every snapshotted setting just to update Default.
-            if (Activator.CreateInstance(bindable.GetType(), new[] { valueProperty.GetValue(bindable) }) is not IParseable parseable)
+            if (Activator.CreateInstance(bindable.GetType(), valueProperty.GetValue(bindable)) is not IParseable parseable)
                 return;
 
             parseable.Parse(value, CultureInfo.InvariantCulture);
@@ -106,6 +106,19 @@ namespace osu.Game.EzOsuGame.Edit
                 return formattable.ToString(null, CultureInfo.InvariantCulture);
 
             return bindable.ToString() ?? string.Empty;
+        }
+
+        private static string normalizeStoredValue(Ez2Setting setting, string value)
+        {
+            if (setting != Ez2Setting.HitPositionGlobalEnable)
+                return value;
+
+            return value switch
+            {
+                "1" or "True" or "true" or "AllSkins" => "1",
+                "0" or "False" or "false" or "CodeSkin" => "0",
+                _ => value,
+            };
         }
 
         private static void tryApplySetting(Ez2ConfigManager config, Ez2Setting setting, string value)
@@ -164,6 +177,7 @@ namespace osu.Game.EzOsuGame.Edit
                     or Ez2Setting.JudgementLineName => typeof(string),
                 Ez2Setting.ManiaPseudo3DRotation or Ez2Setting.ColumnDim or Ez2Setting.ColumnBlur or Ez2Setting.ColumnWidth or Ez2Setting.SpecialFactor
                     or Ez2Setting.HitPosition or Ez2Setting.HitTargetFloatFixed or Ez2Setting.HitTargetAlpha or Ez2Setting.NoteHeightScaleToWidth
+                    or Ez2Setting.ColouringStrength
                     or Ez2Setting.NoteCornerRadius or Ez2Setting.ManiaHoldTailAlpha or Ez2Setting.NoteTrackLineHeight
                     or Ez2Setting.ManiaHoldTailMaskGradientHeight => typeof(double),
                 Ez2Setting.StagePanelEnabled or Ez2Setting.HitPositionGlobalEnable or Ez2Setting.ManiaLNGradientEnable
@@ -171,6 +185,7 @@ namespace osu.Game.EzOsuGame.Edit
                     or Ez2Setting.HitTargetColouringEnabled => typeof(bool),
                 Ez2Setting.ColumnWidthStyle => typeof(ColumnWidthStyle),
                 Ez2Setting.ColouringMode => typeof(EzColouringMode),
+                Ez2Setting.ColouringRange => typeof(EzColouringRange),
                 Ez2Setting.ColumnTypeListSelect => typeof(int),
                 Ez2Setting.StageBackgroundColour or Ez2Setting.ColumnTypeA or Ez2Setting.ColumnTypeB or Ez2Setting.ColumnTypeS or Ez2Setting.ColumnTypeE or Ez2Setting.ColumnTypeP => typeof(Colour4),
                 Ez2Setting.ColumnTypeOf4K or Ez2Setting.ColumnTypeOf5K or Ez2Setting.ColumnTypeOf6K or Ez2Setting.ColumnTypeOf7K or Ez2Setting.ColumnTypeOf8K

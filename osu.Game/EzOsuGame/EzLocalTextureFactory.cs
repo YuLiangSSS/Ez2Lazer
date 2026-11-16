@@ -261,7 +261,7 @@ namespace osu.Game.EzOsuGame
         /// <param name="component"></param>
         /// <param name="isFlare">是否为光效</param>
         /// <returns>纹理 drawable；无资源时为 <c>null</c>。</returns>
-        public Drawable? CreateAnimation(string component, bool? isFlare = null)
+        public Drawable? CreateAnimation(string component, bool? isFlare = null, bool recolour = false)
         {
             bool isHit = isFlare is true;
 
@@ -281,24 +281,24 @@ namespace osu.Game.EzOsuGame
             // 1 帧即普通纹理，不按动画加载。
             if (frames.Count == 1)
             {
-                return new Sprite
-                {
-                    Anchor = anchor,
-                    Origin = Anchor.Centre,
-                    RelativeSizeAxes = relativeSizeAxes,
-                    FillMode = fillMode,
-                    Texture = frames[0],
-                };
+                Sprite sprite = recolour
+                    ? new ColorizeSprite { Algorithm = ColorizeAlgorithm.Multiply }
+                    : new Sprite();
+
+                sprite.Anchor = anchor;
+                sprite.Origin = Anchor.Centre;
+                sprite.RelativeSizeAxes = relativeSizeAxes;
+                sprite.FillMode = fillMode;
+                sprite.Texture = frames[0];
+                return sprite;
             }
 
-            var animation = new TextureAnimation
-            {
-                Anchor = anchor,
-                Origin = Anchor.Centre,
-                RelativeSizeAxes = relativeSizeAxes,
-                FillMode = fillMode,
-                Loop = !isHit
-            };
+            TextureAnimation animation = recolour ? new EzRecolourTextureAnimation() : new TextureAnimation();
+            animation.Anchor = anchor;
+            animation.Origin = Anchor.Centre;
+            animation.RelativeSizeAxes = relativeSizeAxes;
+            animation.FillMode = fillMode;
+            animation.Loop = !isHit;
 
             if (!isHit)
             {
@@ -309,6 +309,35 @@ namespace osu.Game.EzOsuGame
             animation.AddFrames(frames);
 
             return animation;
+        }
+
+        /// <summary>
+        /// 按列类型与 <see cref="EzColumnResourceLookup.DEGRADE_ORDER"/> 解析 Ez Pro note 组件（前缀由查找表给出，<paramref name="componentAfterPrefix"/> 为后缀段）。
+        /// </summary>
+        /// <param name="resolvedPrefix">成功时使用的路径前缀名，失败时为首选前缀。</param>
+        public Drawable? CreateEzProNoteComponent(string componentAfterPrefix, EzColumnType columnType, bool useTintBaseTexture, out string resolvedPrefix)
+        {
+            if (useTintBaseTexture)
+            {
+                resolvedPrefix = EzColumnResourceLookup.TINT_BASE_TEXTURE_AFFIX;
+                return CreateAnimation(EzColumnResourceLookup.FormatEzProNoteResource(resolvedPrefix, componentAfterPrefix), recolour: true);
+            }
+
+            resolvedPrefix = EzColumnResourceLookup.EzProNoteTexturePrefix(columnType);
+
+            foreach (var type in EzColumnResourceLookup.EnumerateDegradeOrder(columnType))
+            {
+                string prefix = EzColumnResourceLookup.EzProNoteTexturePrefix(type);
+                var drawable = CreateAnimation(EzColumnResourceLookup.FormatEzProNoteResource(prefix, componentAfterPrefix), recolour: true);
+
+                if (drawable == null)
+                    continue;
+
+                resolvedPrefix = prefix;
+                return drawable;
+            }
+
+            return null;
         }
 
         // note 帧的**命名**交由层2 三模板统一解析（子目录 {i:D3}、同层 {name}-0、{name}/frame_0 都在覆盖范围内），
@@ -385,7 +414,7 @@ namespace osu.Game.EzOsuGame
             // 按键与数字都要能在 Body 之后，序号来自 layout；这里先算出来供后面复用。
             int keyOrder = layout.GetKeys(columnCount)?.FirstOrDefault()?.Order ?? EzStagePlateLayout.ORDER_KEYS;
 
-            place(addPlateSprite(layout.GrooveLight, $"{basePath}/GrooveLight"), layout.GrooveLight?.Order ?? EzStagePlateLayout.ORDER_GROOVE_LIGHT);
+            Drawable? grooveLight = addPlateSprite(layout.GrooveLight, $"{basePath}/GrooveLight");
 
             if (layout.Meter != null)
             {
@@ -437,6 +466,10 @@ namespace osu.Game.EzOsuGame
 
                 place(character, layout.Character.Order ?? EzStagePlateLayout.ORDER_CHARACTER);
             }
+
+            // layout 里常与 overObject、keys 等同 order（如 JIYU 的 11）。稳定排序下后加入的在上层，
+            // 因此 GrooveLight 延后入表，避免发光区被同层部件盖住。
+            place(grooveLight, layout.GrooveLight?.Order ?? EzStagePlateLayout.ORDER_GROOVE_LIGHT);
 
             // 判定线的偏移决定整块舞台板的上移量，必须在加子项前算出来。
             Drawable? judgementLine = createJudgementLine(layout.JudgementLine, basePath, bodySize, out float judgementLineOffset);
@@ -913,7 +946,7 @@ namespace osu.Game.EzOsuGame
             // 首帧的显示尺寸就是 drawable 铺开后的尺寸；动画在布局前 Height 还是 0，所以这里按帧取。
             contentSize = new Vector2(frames[0].DisplayWidth, frames[0].DisplayHeight);
 
-            BlendingParameters blending = piece.IsAdditive ? BlendingParameters.Additive : BlendingParameters.Inherit;
+            BlendingParameters blending = resolvePlateBlending(piece, texturePath);
 
             if (frames.Count == 1)
             {
@@ -986,6 +1019,14 @@ namespace osu.Game.EzOsuGame
         private static bool isSingleFrameGlow(string texturePath)
             => texturePath.EndsWith("/GrooveLight", StringComparison.OrdinalIgnoreCase)
                || texturePath.EndsWith("/GrooveGaugeLight", StringComparison.OrdinalIgnoreCase);
+
+        private static BlendingParameters resolvePlateBlending(EzStagePlateSprite piece, string texturePath)
+        {
+            if (!string.IsNullOrEmpty(piece.Blend))
+                return piece.IsAdditive ? BlendingParameters.Additive : BlendingParameters.Inherit;
+
+            return isSingleFrameGlow(texturePath) ? BlendingParameters.Additive : BlendingParameters.Inherit;
+        }
 
         // Stage 组件帧：交给层2/层3 同一规则（多帧 AnimationSafe，空则回退 Large 单图）。
         private List<Texture> loadStageComponentFrames(string basePath) => resource.LoadStageFrames(basePath);
