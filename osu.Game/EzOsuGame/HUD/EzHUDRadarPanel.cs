@@ -21,6 +21,7 @@ using osu.Game.EzOsuGame.Skills.Dan;
 using osu.Game.EzOsuGame.Skills.Mina;
 using osu.Game.EzOsuGame.Skills.PPP;
 using osu.Game.EzOsuGame.Skills.SkillTag;
+using osu.Game.EzOsuGame.Skills.SkillTag.KeyPattern;
 using osu.Game.EzOsuGame.Skills.SSR;
 using osu.Game.EzOsuGame.UI;
 using osu.Game.EzOsuGame.UserInterface;
@@ -44,7 +45,7 @@ namespace osu.Game.EzOsuGame.HUD
         [Description("Key Pattern")]
         KeyPattern,
 
-        [Description("SunnySR Skill")]
+        [Description("SSR Skill")]
         SunnySRSkill,
 
         [Description("Skill Dual")]
@@ -72,7 +73,6 @@ namespace osu.Game.EzOsuGame.HUD
         private const float axis_label_alpha = 1f;
 
         // Data normalization constants
-        private const float key_pattern_full_score = 10f;
         private const float long_note_ratio_max = 100f;
 
         private float[] parameterRatios = new float[6];
@@ -473,8 +473,8 @@ namespace osu.Game.EzOsuGame.HUD
         }
 
         /// <summary>
-        /// The analysis result for this chart + mods, from the analysis cache only. A miss is "not computed yet",
-        /// never "read the stored rows instead".
+        /// The analysis result for this chart + mods, from the analysis cache only. The cache decides L1/L2/L3;
+        /// this panel does not. A kps-only slice has no radar polygons.
         /// </summary>
         private EzAnalysisResult? getLiveAnalysis(BeatmapInfo beatmapInfo)
         {
@@ -585,7 +585,7 @@ namespace osu.Game.EzOsuGame.HUD
 
             EzPersistedChartDan? persistedChartDan = null;
 
-            skillProvider?.TryGetPersistedChartDan(beatmapInfo, out persistedChartDan);
+            analysisCache?.TryGetPersistedChartDan(beatmapInfo, out persistedChartDan);
 
             if (keyCount <= 0 && persistedChartDan is { KeyCount: > 0 })
                 keyCount = persistedChartDan.KeyCount;
@@ -599,7 +599,7 @@ namespace osu.Game.EzOsuGame.HUD
 
             // Decided before the values land: the long-note frame has its own axis set, and painting the RC frame
             // first would visibly morph into it.
-            if (expectsLnSkillRadar(keyCount, persistedChartDan, holdRatio, holdCount))
+            if (expectsLnSkillRadar(keyCount, holdRatio, holdCount))
             {
                 applyLnSkillRadar(EzLnSkillRadar.BuildAxes(holdRatio, structureAxes, keyCount));
                 return;
@@ -634,17 +634,12 @@ namespace osu.Game.EzOsuGame.HUD
         private static IReadOnlyDictionary<string, double> structureAxesOf(in EzAnalysisResult analysis) => analysis.AxesOf(EzAnalysisSystem.CSI);
 
         /// <summary>
-        /// Synchronous LN/RC pre-judgement. Realm-persisted ChartDan with an LN half is authoritative
-        /// (written through the same hold gate); otherwise fall back to that gate using the Mina hold ratio
-        /// and the stored hold-object count.
+        /// Synchronous LN/RC pre-judgement from beatmap object counts only (not ChartDan rows).
         /// </summary>
-        private static bool expectsLnSkillRadar(int keyCount, EzPersistedChartDan? persistedChartDan, double holdRatio, int holdCount)
+        private static bool expectsLnSkillRadar(int keyCount, double holdRatio, int holdCount)
         {
             if (keyCount <= 0)
                 return false;
-
-            if (persistedChartDan != null && persistedChartDan.HasSide(EzDanSide.Ln))
-                return true;
 
             return EzDanAlgorithm.AllowsPersistedChartLnHalf(keyCount, holdRatio, holdCount);
         }
@@ -888,27 +883,22 @@ namespace osu.Game.EzOsuGame.HUD
 
         private EzRadarChartData<string> createDisplayedRulesetRadarData(EzRadarChartData<string> sourceRadarData, double? sunnySR)
         {
-            if (RadarDisplayMode.Value == EzRadarDisplayMode.SunnySRSkill)
+            if (RadarDisplayMode.Value != EzRadarDisplayMode.KeyPattern || UseAbsoluteValue.Value || sunnySR is not double sunny || sunny <= 0)
                 return sourceRadarData;
 
-            if (!UseAbsoluteValue.Value || sunnySR is not double sunny || sunny <= 0)
-                return sourceRadarData;
-
-            bool preserveLongNotePercentage = RadarDisplayMode.Value == EzRadarDisplayMode.KeyPattern;
             var axes = new EzRadarAxisValue<string>[sourceRadarData.Count];
 
             for (int i = 0; i < sourceRadarData.Count; i++)
             {
                 EzRadarAxisValue<string> axis = sourceRadarData[i];
 
-                if (preserveLongNotePercentage && axis.Axis == "LN%")
+                if (axis.Axis == "LN%")
                 {
                     axes[i] = axis;
                     continue;
                 }
 
-                double absoluteValue = Math.Round(axis.Value / key_pattern_full_score * sunny, 2, MidpointRounding.AwayFromZero);
-                axes[i] = new EzRadarAxisValue<string>(axis.Axis, absoluteValue, "0.00");
+                axes[i] = new EzRadarAxisValue<string>(axis.Axis, EzKeyPatternUnit.ToRelative(axis.Value, sunny), "0.00");
             }
 
             return EzRadarChartData<string>.Create(axes);

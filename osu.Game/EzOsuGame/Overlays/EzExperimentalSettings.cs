@@ -1,28 +1,37 @@
 // Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
+using System;
 using System.Collections.Generic;
 using osu.Framework.Allocation;
+using osu.Framework.Bindables;
 using osu.Framework.Extensions;
 using osu.Framework.Graphics;
 using osu.Framework.Localisation;
+using osu.Framework.Screens;
 using osu.Game.Database;
+using osu.Game.EzOsuGame.Audio;
 using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Localization;
 using osu.Game.EzOsuGame.LocalProfile;
 using osu.Game.EzOsuGame.Scoring;
+using osu.Game.EzOsuGame.Screens.Utility;
 using osu.Game.EzOsuGame.Skills;
 using osu.Game.Graphics.UserInterfaceV2;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Overlays.Settings;
 using osu.Game.Rulesets;
+using osu.Game.Screens;
 
 namespace osu.Game.EzOsuGame.Overlays
 {
     public partial class EzExperimentalSettings : SettingsSubsection
     {
         protected override LocalisableString Header => EZ_EXPERIMENTAL_SECTION_HEADER;
+
+        private Bindable<bool>? latencyTrackerEnabled;
+        private Action<ValueChangedEvent<bool>>? latencyThresholdVisibilityHandler;
 
         [BackgroundDependencyLoader]
         private void load(Ez2ConfigManager ezConfig,
@@ -35,7 +44,8 @@ namespace osu.Game.EzOsuGame.Overlays
                           EzLocalProfileOnlinePullService? onlinePullService,
                           RulesetStore? rulesetStore,
                           EzExternalRulesetManagerDialog? externalRulesetManager,
-                          EzDataRebuildDialog? rebuildDialog)
+                          EzDataRebuildDialog? rebuildDialog,
+                          IPerformFromScreenRunner? performer)
         {
             EzDataRebuildSettingsSection.AddTo(this, backgroundDataStoreProcessor, skillStore, playerSkillStore, localProfileService?.Store, rebuildDialog);
 
@@ -63,6 +73,39 @@ namespace osu.Game.EzOsuGame.Overlays
                 Action = () => externalRulesetManager?.ShowManager(),
             });
 
+            latencyTrackerEnabled = ezConfig.GetBindable<bool>(Ez2Setting.InputAudioLatencyTracker);
+
+            SettingsItemV2 latencyThresholdItem = new SettingsItemV2(new FormSliderBar<float>
+            {
+                Current = InputAudioLatencyTracker.AcousticThreshold,
+                Caption = INPUT_AUDIO_LATENCY_THRESHOLD,
+                HintText = INPUT_AUDIO_LATENCY_THRESHOLD_TOOLTIP,
+                KeyboardStep = 1f,
+                LabelFormat = value => $"{value:0} dB",
+            });
+
+            SettingsItemV2 latencyExitNotifyItem = new SettingsItemV2(new FormCheckBox
+            {
+                Current = InputAudioLatencyTracker.NotifyOnEarlyExit,
+                Caption = INPUT_AUDIO_LATENCY_EXIT_NOTIFY,
+                HintText = INPUT_AUDIO_LATENCY_EXIT_NOTIFY_TOOLTIP,
+            });
+
+            latencyThresholdVisibilityHandler = enabled =>
+            {
+                if (enabled.NewValue)
+                {
+                    latencyThresholdItem.Show();
+                    latencyExitNotifyItem.Show();
+                }
+                else
+                {
+                    latencyThresholdItem.Hide();
+                    latencyExitNotifyItem.Hide();
+                }
+            };
+            latencyTrackerEnabled.BindValueChanged(latencyThresholdVisibilityHandler, true);
+
             AddRange(new Drawable[]
             {
                 new SettingsItemV2(new FormCheckBox
@@ -76,13 +119,15 @@ namespace osu.Game.EzOsuGame.Overlays
                 },
                 new SettingsItemV2(new FormCheckBox
                 {
-                    Current = ezConfig.GetBindable<bool>(Ez2Setting.InputAudioLatencyTracker),
+                    Current = latencyTrackerEnabled,
                     Caption = INPUT_AUDIO_LATENCY_TRACKER,
                     HintText = INPUT_AUDIO_LATENCY_TRACKER_TOOLTIP,
                 })
                 {
                     Keywords = new[] { "latency", "audio", "input" }
                 },
+                latencyThresholdItem,
+                latencyExitNotifyItem,
                 new SettingsItemV2(new FormCheckBox
                 {
                     Current = ezConfig.GetBindable<bool>(Ez2Setting.EzJudgmentDiagEnabled),
@@ -164,6 +209,20 @@ namespace osu.Game.EzOsuGame.Overlays
                     Keywords = new[] { "gc", "garbage", "collection", "server", "workstation", "stutter", "frame", "内存", "卡顿", "帧" }
                 },
             });
+
+            Add(new SettingsButtonV2
+            {
+                Text = EzAudioDriverLatencyScreen.BUTTON_TEXT,
+                Action = () => performer?.PerformFromScreen(menu => menu.Push(new EzAudioDriverLatencyScreen())),
+            });
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            if (isDisposing && latencyTrackerEnabled != null && latencyThresholdVisibilityHandler != null)
+                latencyTrackerEnabled.ValueChanged -= latencyThresholdVisibilityHandler;
+
+            base.Dispose(isDisposing);
         }
 
         private void requestComputeLocalProfile(
@@ -404,12 +463,30 @@ namespace osu.Game.EzOsuGame.Overlays
             "(测试功能) 追踪按键 → Sample.Play → 输出路径 PCM 过阈值的闭环延迟（不含判定）。"
             + "Default / Shared / Exclusive / ASIO 均可用；局末弹统计，明细见 ez_runtime。"
             + "\nIn→Play：软件段；Play→Acou / In→Acou：混音进入当前输出驱动时过阈值（非麦克风）。"
-            + "\n判定耗时请开「Ez 判定诊断」CSV。阈值：AcousticRmsThreshold（可热重载）。",
+            + "\n阈值用下方滑条，不写入配置。",
             "(Testing feature) Tracks key → Sample.Play → output-path PCM threshold latency (not judgment). "
             + "Works on Default / Shared / Exclusive / ASIO; summary after play, details in ez_runtime."
             + "\nIn→Play: software; Play→Acou / In→Acou: mixer PCM crosses threshold as it enters the active output driver (not a mic)."
             + "\nFor key→judgment latency, enable Ez Judgment Diagnostics CSV. "
-            + "Threshold: AcousticRmsThreshold (hot-reloadable).");
+            + "Threshold is the slider below; it is not saved.");
+
+        internal static readonly LocalisableString INPUT_AUDIO_LATENCY_THRESHOLD = new EzLocalizationManager.EzLocalisableString(
+            "输出路径阈值", "Output-path threshold");
+
+        internal static readonly LocalisableString INPUT_AUDIO_LATENCY_THRESHOLD_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "dBFS。不写入配置，只在本次启动有效，重启回到 -22。"
+            + "\n数值越低，越轻的打击音也能过阈值。",
+            "dBFS. Not saved; this launch only, back to -22 after restart."
+            + "\nLower values let quieter hitsounds cross the threshold.");
+
+        internal static readonly LocalisableString INPUT_AUDIO_LATENCY_EXIT_NOTIFY = new EzLocalizationManager.EzLocalisableString(
+            "中途退出也通知", "Also notify when leaving mid-play");
+
+        internal static readonly LocalisableString INPUT_AUDIO_LATENCY_EXIT_NOTIFY_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "不写入配置，重启后关闭。"
+            + "\n关闭时只在打完进结算、心流或快速轮换时弹汇总。打开后，中途退出也弹。",
+            "Not saved; off again after restart."
+            + "\nOff: toast only when a play reaches results, flow, or quick rotation. On: also toast when leaving mid-play.");
 
         internal static readonly LocalisableString EZ_HUD_CAMERA_ENABLED = new EzLocalizationManager.EzLocalisableString(
             "启用摄像头 HUD", "Enable Camera HUD");

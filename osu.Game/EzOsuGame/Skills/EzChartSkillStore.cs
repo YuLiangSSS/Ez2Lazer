@@ -13,6 +13,8 @@ using osu.Game.EzOsuGame.Skills.Dan;
 using osu.Game.EzOsuGame.Skills.Mina;
 using osu.Game.EzOsuGame.Skills.PPP;
 using osu.Game.EzOsuGame.Skills.SkillTag;
+using osu.Game.EzOsuGame.Skills.SkillTag.KeyPattern;
+using osu.Game.EzOsuGame.Skills.SSR;
 using osu.Game.EzOsuGame.Startup;
 using Realms;
 
@@ -372,22 +374,73 @@ namespace osu.Game.EzOsuGame.Skills
         /// bump that only moved a stamp would leave the old rows looking settled.
         /// </remarks>
         public IReadOnlyList<EzAnalysisSystem> Invalidate(EzAnalysisSystem system)
+            => Invalidate(system, includeDownstream: true);
+
+        /// <summary>
+        /// Retires <paramref name="system"/> and, when requested, every system that reads it.
+        /// </summary>
+        /// <param name="includeDownstream">
+        /// When false, only upstream rows are cleared so a pass can refill them before derived rows are retired.
+        /// </param>
+        public IReadOnlyList<EzAnalysisSystem> Invalidate(EzAnalysisSystem system, bool includeDownstream)
         {
             var invalidated = new List<EzAnalysisSystem> { system };
-            invalidated.AddRange(DownstreamOf(system));
 
-            foreach (var affected in invalidated)
+            if (includeDownstream)
+                invalidated.AddRange(DownstreamOf(system));
+
+            retireRows(invalidated);
+
+            // Sunny columns go to -1; Realm downstream keeps its rows but AppliedVersion=0 until the upstream pass
+            // finishes and BDSP calls <see cref="InvalidateDownstream"/> once (same contract as column -1 queuing).
+            if (!includeDownstream)
+                stampDownstreamAwaitingReset(system);
+
+            return invalidated;
+        }
+
+        /// <summary>
+        /// Downstream systems were left readable but stamped as owing a reset after an upstream-only invalidate.
+        /// </summary>
+        public bool DownstreamAwaitingReset(EzAnalysisSystem upstream)
+        {
+            foreach (var downstream in DownstreamOf(upstream))
+            {
+                if (GetAppliedVersion(downstream) == 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void stampDownstreamAwaitingReset(EzAnalysisSystem upstream)
+        {
+            foreach (var downstream in DownstreamOf(upstream))
+                SetAppliedVersion(downstream, 0);
+        }
+
+        /// <summary>
+        /// Retires every system that reads <paramref name="system"/>, after that system's own refill pass has finished.
+        /// </summary>
+        public IReadOnlyList<EzAnalysisSystem> InvalidateDownstream(EzAnalysisSystem system)
+        {
+            var downstream = DownstreamOf(system);
+            retireRows(downstream);
+            return downstream;
+        }
+
+        private void retireRows(IReadOnlyList<EzAnalysisSystem> systems)
+        {
+            foreach (var affected in systems)
                 clearRows(affected);
 
-            foreach (var affected in invalidated)
+            foreach (var affected in systems)
             {
                 int version = affected.CurrentVersion();
 
                 if (version > 0)
                     SetAppliedVersion(affected, version);
             }
-
-            return invalidated;
         }
 
         private void clearRows(EzAnalysisSystem system)
@@ -413,6 +466,10 @@ namespace osu.Game.EzOsuGame.Skills
                 case EzAnalysisSystem.SSR:
                     ClearRatings(EzAnalysisSystem.SSR);
                     break;
+
+                case EzAnalysisSystem.KeyPattern:
+                    ClearBeatmapPatternSkills();
+                    break;
             }
         }
 
@@ -425,6 +482,9 @@ namespace osu.Game.EzOsuGame.Skills
         /// </remarks>
         public void ClearRatings(EzAnalysisSystem system)
         {
+            if (system == EzAnalysisSystem.KeyPattern)
+                return;
+
             realmAccess.Write(r =>
             {
                 foreach (var beatmap in r.All<BeatmapInfo>())
@@ -695,7 +755,7 @@ namespace osu.Game.EzOsuGame.Skills
                     BeatmapId = beatmapId,
                     InfoVersion = EzCSIEngine.VERSION,
                     ComputedAt = at,
-                    PatternTagsJoined = joinPatterns(info.Patterns),
+                    PatternTagsJoined = joinPatterns(info.SkillTags),
                     JackDemand = info.JackDemand,
                     JackShare = info.JackShare ?? -1,
                     StreamShare = info.StreamShare ?? -1,
@@ -789,10 +849,7 @@ namespace osu.Game.EzOsuGame.Skills
                 r.Remove(row);
         }
 
-        /// <summary>
-        /// Typed Realm ChartDan (EZ>=10). Filtered on the current dan revision, so a bump
-        /// of the dan algorithm, CSI, or Mina reads as a miss and BDSP recomputes it.
-        /// </summary>
+        /// <summary>Typed Realm ChartDan (EZ>=10). Returns any stored row for the hash; staleness is backfill-only.</summary>
         public bool TryGetChartDan(string beatmapHash, out EzPersistedChartDan? chartDan)
         {
             chartDan = null;
@@ -897,6 +954,8 @@ namespace osu.Game.EzOsuGame.Skills
             var facets = new List<EzFacetStatus>(report.Facets.Count + 1);
             facets.AddRange(report.Facets);
             facets.Add(scanPppCharts().Status);
+            facets.Add(scanSunnySrSkillCharts().Status);
+            facets.Add(scanKeyPatternCharts().Status);
 
             return new EzDataStateReport
             {
@@ -909,6 +968,189 @@ namespace osu.Game.EzOsuGame.Skills
         /// <summary>Beatmaps whose PPP chart skills are missing a current per-skill version.</summary>
         public IReadOnlyList<Guid> CollectPppChartDebt()
             => scanPppCharts().OwedIds;
+
+        /// <summary>
+        /// Mania charts missing the current KeyPattern radar axis set.
+        /// </summary>
+        public IReadOnlyList<Guid> CollectKeyPatternSkillDebt()
+        {
+            return realmAccess.Run(r =>
+            {
+                const int revision = EzKeyPatternUnit.VERSION;
+                string systemId = EzAnalysisSystem.KeyPattern.ToStorageId();
+                var required = EzKeyPatternAxisExtensions.RadarAxisIds;
+
+                var presentByHash = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+                foreach (var row in r.All<EzBeatmapSkillValue>().Where(v => v.SystemId == systemId && v.AlgorithmVersion == revision))
+                {
+                    if (!presentByHash.TryGetValue(row.BeatmapHash, out var set))
+                        presentByHash[row.BeatmapHash] = set = new HashSet<string>(StringComparer.Ordinal);
+
+                    set.Add(row.SkillId);
+                }
+
+                var owed = new List<Guid>();
+
+                foreach (var beatmap in r.All<BeatmapInfo>())
+                {
+                    if (beatmap.BeatmapSet == null || string.IsNullOrEmpty(beatmap.Hash))
+                        continue;
+
+                    if (!EzKeyPatternUnit.SupportsRuleset(beatmap.Ruleset.OnlineID))
+                        continue;
+
+                    double sunnySR = beatmap.EzRatingData.SunnySR;
+
+                    // EKP waits for a real Sunny star. 0 with objects is the N/A stamp, not a rating.
+                    // Empty charts still owe a zero EKP row once Sunny has settled at 0.
+                    if (sunnySR < 0)
+                        continue;
+
+                    if (!EzKeyPatternUnit.IsQuantifiableSunny(sunnySR) && beatmap.TotalObjectCount > 0)
+                        continue;
+
+                    if (!presentByHash.TryGetValue(beatmap.Hash, out var have))
+                    {
+                        owed.Add(beatmap.ID);
+                        continue;
+                    }
+
+                    foreach (string axisId in required)
+                    {
+                        if (!have.Contains(axisId))
+                        {
+                            owed.Add(beatmap.ID);
+                            break;
+                        }
+                    }
+                }
+
+                return (IReadOnlyList<Guid>)owed;
+            });
+        }
+
+        /// <summary>
+        /// Mania charts with a stored Sunny star but not the full current <see cref="EzSunnySrSkillAxis"/> set.
+        /// </summary>
+        public IReadOnlyList<Guid> CollectSunnySrSkillDebt()
+        {
+            return realmAccess.Run(r =>
+            {
+                const int revision = EzSSRUnit.VERSION;
+                string ssrSystemId = EzAnalysisSystem.SSR.ToStorageId();
+                var required = EzSunnySrSkillAxisExtensions.ChartAxisIds;
+
+                var presentByHash = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+                foreach (var row in r.All<EzBeatmapSkillValue>().Where(v => v.SystemId == ssrSystemId && v.AlgorithmVersion == revision))
+                {
+                    if (!presentByHash.TryGetValue(row.BeatmapHash, out var set))
+                        presentByHash[row.BeatmapHash] = set = new HashSet<string>(StringComparer.Ordinal);
+
+                    set.Add(row.SkillId);
+                }
+
+                var owed = new List<Guid>();
+
+                foreach (var beatmap in r.All<BeatmapInfo>())
+                {
+                    if (beatmap.BeatmapSet == null || string.IsNullOrEmpty(beatmap.Hash))
+                        continue;
+
+                    if (!EzSSRUnit.SupportsRuleset(beatmap.Ruleset.OnlineID))
+                        continue;
+
+                    if (beatmap.EzRatingData.SunnySR < 0)
+                        continue;
+
+                    if (!presentByHash.TryGetValue(beatmap.Hash, out var have))
+                    {
+                        owed.Add(beatmap.ID);
+                        continue;
+                    }
+
+                    foreach (string axisId in required)
+                    {
+                        if (!have.Contains(axisId))
+                        {
+                            owed.Add(beatmap.ID);
+                            break;
+                        }
+                    }
+                }
+
+                return (IReadOnlyList<Guid>)owed;
+            });
+        }
+
+        private KeyPatternChartScan scanKeyPatternCharts()
+        {
+            var owed = CollectKeyPatternSkillDebt();
+
+            int universe = realmAccess.Run(r => r.All<BeatmapInfo>().AsEnumerable().Count(b =>
+                b.BeatmapSet != null
+                && !string.IsNullOrEmpty(b.Hash)
+                && EzKeyPatternUnit.SupportsRuleset(b.Ruleset.OnlineID)));
+
+            var facet = new EzFacetStatus
+            {
+                Id = "KeyPattern",
+                CurrentRevision = EzKeyPatternUnit.VERSION,
+                Ready = Math.Max(0, universe - owed.Count),
+                Settled = 0,
+                Missing = owed.Count,
+            };
+
+            return new KeyPatternChartScan(facet);
+        }
+
+        private readonly record struct KeyPatternChartScan(EzFacetStatus Status);
+
+        private SunnySrSkillChartScan scanSunnySrSkillCharts()
+        {
+            var owed = CollectSunnySrSkillDebt();
+
+            int universe = realmAccess.Run(r => r.All<BeatmapInfo>().AsEnumerable().Count(b =>
+                b.BeatmapSet != null
+                && !string.IsNullOrEmpty(b.Hash)
+                && EzSSRUnit.SupportsRuleset(b.Ruleset.OnlineID)
+                && b.EzRatingData.SunnySR >= 0));
+
+            var facet = new EzDataStateFacet
+            {
+                Id = "SunnySRSkill",
+                CurrentRevision = EzSSRUnit.VERSION,
+                UniverseCount = universe,
+                Rows = new Dictionary<string, EzFacetRowState>(StringComparer.Ordinal),
+            };
+
+            int missing = owed.Count;
+
+            return new SunnySrSkillChartScan(new EzFacetStatus
+            {
+                Id = facet.Id,
+                CurrentRevision = facet.CurrentRevision,
+                Ready = Math.Max(0, universe - missing),
+                Settled = 0,
+                Missing = missing,
+            });
+        }
+
+        public void ClearBeatmapPatternSkills()
+        {
+            string systemId = EzAnalysisSystem.KeyPattern.ToStorageId();
+
+            realmAccess.Write(r =>
+            {
+                var rows = r.All<EzBeatmapSkillValue>()
+                            .Where(v => v.SystemId == systemId)
+                            .ToList();
+
+                foreach (var row in rows)
+                    r.Remove(row);
+            });
+        }
 
         public void ClearBeatmapPPP()
         {
@@ -1039,6 +1281,8 @@ namespace osu.Game.EzOsuGame.Skills
 
         private readonly record struct PppChartScan(List<Guid> OwedIds, EzFacetStatus Status);
 
+        private readonly record struct SunnySrSkillChartScan(EzFacetStatus Status);
+
         /// <summary>
         /// Batch-read typed ChartSkillInfo rows for many hashes in one Realm run.
         /// Missing / wrong-version hashes are omitted.
@@ -1124,7 +1368,7 @@ namespace osu.Game.EzOsuGame.Skills
 
             return new EzChartSkillInfo
             {
-                Patterns = splitPatterns(row.PatternTagsJoined),
+                SkillTags = splitPatterns(row.PatternTagsJoined),
                 JackDemand = row.JackDemand,
                 JackShare = optionalDouble(row.JackShare),
                 StreamShare = optionalDouble(row.StreamShare),

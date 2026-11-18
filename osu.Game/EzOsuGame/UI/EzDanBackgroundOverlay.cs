@@ -10,8 +10,8 @@ using osu.Framework.Graphics.Containers;
 using osu.Framework.Graphics.Sprites;
 using osu.Framework.Graphics.Textures;
 using osu.Game.Beatmaps;
+using osu.Game.EzOsuGame.Analysis;
 using osu.Game.EzOsuGame.Configuration;
-using osu.Game.EzOsuGame.Skills;
 using osu.Game.EzOsuGame.Skills.Dan;
 using osu.Game.Rulesets.Mods;
 using osuTK;
@@ -39,7 +39,7 @@ namespace osu.Game.EzOsuGame.UI
         private Bindable<IReadOnlyList<Mod>> mods { get; set; } = null!;
 
         [Resolved]
-        private EzSkillProvider? skillProvider { get; set; }
+        private EzAnalysisCache? analysisCache { get; set; }
 
         [Resolved]
         private EzResourceStore resources { get; set; } = null!;
@@ -116,7 +116,7 @@ namespace osu.Game.EzOsuGame.UI
 
             var info = beatmap.Value.BeatmapInfo;
 
-            if (info == null || skillProvider == null)
+            if (info == null || analysisCache == null)
             {
                 setBadge(badge, null);
                 return;
@@ -128,7 +128,7 @@ namespace osu.Game.EzOsuGame.UI
                 return;
             }
 
-            skillProvider.TryGetChartDanForUi(info, out var chartDan, allowMemoryCompute: true);
+            analysisCache.TryGetChartDanForUi(info, out var chartDan, allowMemoryCompute: true);
 
             int keyCount = 0;
 
@@ -138,8 +138,10 @@ namespace osu.Game.EzOsuGame.UI
             if (keyCount <= 0 && info.Difficulty.CircleSize > 0)
                 keyCount = (int)Math.Round(info.Difficulty.CircleSize);
 
-            EzDanSide side = chartDan?.HasSide(EzDanSide.Ln) == true ? EzDanSide.Ln : EzDanSide.Rc;
-            setBadge(badge, tryLoadBadge(keyCount, side, chartDan?.LabelFor(side)));
+            var presentation = chartDan?.ToPresentationVerdict(info);
+            EzDanSide side = presentation?.Side ?? EzDanAlgorithm.PreferredPresentationSide(info, keyCount);
+            string? label = presentation?.Label ?? chartDan?.LabelFor(side);
+            setBadge(badge, tryLoadBadge(keyCount, side, label));
         }
 
         private static bool isDanBeatmap(BeatmapInfo info)

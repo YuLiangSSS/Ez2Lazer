@@ -309,7 +309,7 @@ namespace osu.Game.Screens.Select
                     spreadDisplay.Beatmap.Value = beatmap.Value.BeatmapInfo;
 
                     if (beatmap.Value.BeatmapInfo is BeatmapInfo beatmapInfo)
-                        dualDifficultyDisplay.UpdateFromBeatmap(beatmapInfo);
+                        dualDifficultyDisplay.ApplySkillStar(beatmapInfo, ezAnalysisCache.ReadVariantValues(beatmapInfo, mods.Value).SkillStar);
                 }
 
                 // The pp pill follows the same live calculation as the official star pill.
@@ -340,7 +340,7 @@ namespace osu.Game.Screens.Select
                 applyVariantPerformance(beatmap.Value.BeatmapInfo, starDifficulty);
             }
 
-            public void ApplyKpcMetrics(in EzSongSelectAnalysisDisplay.PanelMetrics metrics)
+            public void ApplyKpcMetrics(in EzSongSelectAnalysisDisplay.PanelMetrics metrics, double? skillStar)
             {
                 if (beatmap.IsDefault || beatmap.Value.BeatmapInfo is not BeatmapInfo beatmapInfo)
                 {
@@ -362,7 +362,7 @@ namespace osu.Game.Screens.Select
                     ezDisplayKpc.Hide();
                 }
 
-                dualDifficultyDisplay.ApplyAnalysisMetrics(beatmapInfo, metrics);
+                dualDifficultyDisplay.ApplySkillStar(beatmapInfo, skillStar);
                 applyVariantPerformance(beatmapInfo, liveDifficulty.Value);
             }
 

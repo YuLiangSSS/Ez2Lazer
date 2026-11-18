@@ -29,7 +29,6 @@ using osu.Game.Configuration;
 using osu.Game.Database;
 using osu.Game.EzOsuGame.Analysis;
 using osu.Game.EzOsuGame.Configuration;
-using osu.Game.EzOsuGame.Skills;
 using osu.Game.EzOsuGame.UI;
 using osu.Game.Graphics;
 using osu.Game.Graphics.Carousel;
@@ -201,21 +200,20 @@ namespace osu.Game.Screens.Select
 
         private bool useActiveSongsBranchAsBeatmapSource => ezAnalysisCache.IsActiveSongsBranchFor(ruleset.Value, Criteria?.Mods);
 
-        private bool useEzAnalysisBranchForSunnySROperations => useActiveSongsBranchAsBeatmapSource && ezAnalysisFilter.Value;
-
         /// <summary>
-        /// Whether the active system for this ruleset is the Sunny one and a branch snapshot with mods is in play,
-        /// in which case its star has to come from the branch rather than the NoMod column.
+        /// The songs-branch snapshot stores the SSR star for the active mods. It answers difficulty
+        /// operations only while the selected readout's rating is that system.
         /// </summary>
-        private bool usesSunnyBranchOperations => useEzAnalysisBranchForSunnySROperations
-                                                  && EzRulesetReadout.Selected(ruleset.Value?.OnlineID ?? -1)?.Id == EzRulesetReadout.SUNNY;
+        private bool usesBranchStarOperations => useActiveSongsBranchAsBeatmapSource
+                                                 && ezAnalysisFilter.Value
+                                                 && EzRulesetReadout.Selected(ruleset.Value?.OnlineID ?? -1)?.Rating == EzAnalysisSystem.SSR;
 
         private Task<IReadOnlyDictionary<BeatmapInfo, double>> getDifficultiesForOperationsAsync(IEnumerable<BeatmapInfo> beatmaps, CancellationToken cancellationToken)
         {
             if (Criteria == null)
                 return Task.FromResult(empty_operation_difficulties);
 
-            if (usesSunnyBranchOperations)
+            if (usesBranchStarOperations)
                 return getStrictActiveBranchDifficultiesAsync(beatmaps.Distinct().ToList(), Criteria.Mods, cancellationToken);
 
             return Task.FromResult(empty_operation_difficulties);
@@ -229,13 +227,13 @@ namespace osu.Game.Screens.Select
         {
             var beatmapList = beatmaps.Distinct().ToList();
 
-            if (beatmapList.Count == 0 || ezSkillProvider == null || system == EzAnalysisSystem.None || string.IsNullOrEmpty(axisId))
+            if (beatmapList.Count == 0 || system == EzAnalysisSystem.None || string.IsNullOrEmpty(axisId))
                 return Task.FromResult(empty_operation_difficulties);
 
             return Task.Run(() =>
             {
                 int rulesetOnlineId = ruleset.Value?.OnlineID ?? -1;
-                var byHash = ezSkillProvider.GetBeatmapSkillAxisForHashes(
+                var byHash = ezAnalysisCache.GetBeatmapSkillAxisForHashes(
                     beatmapList.Select(static b => b.Hash),
                     system,
                     axisId,
@@ -261,12 +259,12 @@ namespace osu.Game.Screens.Select
         {
             var beatmapList = beatmaps.Distinct().ToList();
 
-            if (beatmapList.Count == 0 || ezSkillProvider == null)
+            if (beatmapList.Count == 0)
                 return Task.FromResult<IReadOnlyDictionary<BeatmapInfo, string[]>>(new Dictionary<BeatmapInfo, string[]>());
 
             return Task.Run(() =>
             {
-                var byHash = ezSkillProvider.GetChartSkillTagsForHashes(beatmapList.Select(static b => b.Hash));
+                var byHash = ezAnalysisCache.GetChartSkillTagsForHashes(beatmapList.Select(static b => b.Hash));
                 var resolved = new Dictionary<BeatmapInfo, string[]>(beatmapList.Count);
 
                 foreach (var beatmap in beatmapList)
@@ -340,8 +338,8 @@ namespace osu.Game.Screens.Select
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    if (activeSongsBranchValues.TryGetValue(beatmap.ID, out double sunnySR))
-                        cachedDifficulties[beatmap.ID] = sunnySR;
+                    if (activeSongsBranchValues.TryGetValue(beatmap.ID, out double star))
+                        cachedDifficulties[beatmap.ID] = star;
                 }
             }
 
@@ -351,8 +349,8 @@ namespace osu.Game.Screens.Select
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (cachedDifficulties.TryGetValue(beatmap.ID, out double sunnySR))
-                    resolvedValues[beatmap] = sunnySR;
+                if (cachedDifficulties.TryGetValue(beatmap.ID, out double star))
+                    resolvedValues[beatmap] = star;
             }
 
             return Task.FromResult<IReadOnlyDictionary<BeatmapInfo, double>>(resolvedValues);
@@ -378,7 +376,7 @@ namespace osu.Game.Screens.Select
 
                     // Avoid redundant filters when branch metadata changes but the carousel is not reading the
                     // branch, which is the case unless the active system needs it.
-                    if (!useActiveSongsBranchAsBeatmapSource && !usesSunnyBranchOperations)
+                    if (!useActiveSongsBranchAsBeatmapSource && !usesBranchStarOperations)
                         return;
 
                     Filter(Criteria, true);
@@ -1134,9 +1132,6 @@ namespace osu.Game.Screens.Select
 
         [Resolved]
         private EzAnalysisCache ezAnalysisCache { get; set; } = null!;
-
-        [Resolved(canBeNull: true)]
-        private EzSkillProvider? ezSkillProvider { get; set; }
 
         /// <remarks>
         /// FOOTGUN WARNING: this being sorted on the realm side before detaching is IMPORTANT.

@@ -83,9 +83,6 @@ namespace osu.Game.Screens.Select
         private EzAnalysisCache ezAnalysisCache { get; set; } = null!;
 
         [Resolved]
-        private EzAnalysisDatabase ezAnalysisDatabase { get; set; } = null!;
-
-        [Resolved]
         private Ez2ConfigManager ezConfig { get; set; } = null!;
 
         private DifficultyDisplay difficultyDisplay = null!;
@@ -308,15 +305,14 @@ namespace osu.Game.Screens.Select
             clearEzAnalysisBinding();
             kpsGraph.SetPoints(EzSongSelectAnalysisDisplay.EMPTY.KpsList);
             wedgeMetricsApplied = false;
-            difficultyDisplay.ApplyKpcMetrics(EzSongSelectAnalysisDisplay.EMPTY);
 
             if (working.Value.BeatmapInfo is not BeatmapInfo beatmapInfo)
+            {
+                difficultyDisplay.ApplyKpcMetrics(EzSongSelectAnalysisDisplay.EMPTY, null);
                 return;
+            }
 
-            if (ruleset.Value is RulesetInfo rulesetInfo
-                && EzPanelKpsMetrics.TryResolveBaselineFromSqlite(ezAnalysisDatabase, beatmapInfo, rulesetInfo, mods.Value, out var baseline))
-                applyWedgeMetrics(baseline);
-
+            difficultyDisplay.ApplyKpcMetrics(EzSongSelectAnalysisDisplay.EMPTY, readoutSkillStar(beatmapInfo));
             computeEzAnalysis();
         }
 
@@ -358,15 +354,18 @@ namespace osu.Game.Screens.Select
             if (result is { } analysis && !EzSongSelectAnalysisDisplay.ShouldApplyPanelKpsUpdate(analysis, mods.Value))
                 return;
 
-            applyWedgeMetrics(EzSongSelectAnalysisDisplay.Resolve(beatmapInfo, result, mods.Value));
+            applyWedgeMetrics(EzSongSelectAnalysisDisplay.Resolve(beatmapInfo, result, mods.Value), readoutSkillStar(beatmapInfo));
         }
 
-        private void applyWedgeMetrics(in EzSongSelectAnalysisDisplay.PanelMetrics metrics)
+        private double? readoutSkillStar(BeatmapInfo beatmap)
+            => ezAnalysisCache.ReadVariantValues(beatmap, mods.Value).SkillStar;
+
+        private void applyWedgeMetrics(in EzSongSelectAnalysisDisplay.PanelMetrics metrics, double? skillStar)
         {
             lastWedgeMetrics = metrics;
             wedgeMetricsApplied = true;
             applyWedgeKpsGraph(metrics);
-            difficultyDisplay.ApplyKpcMetrics(metrics);
+            difficultyDisplay.ApplyKpcMetrics(metrics, skillStar);
         }
 
         private void applyWedgeKpsGraph(in EzSongSelectAnalysisDisplay.PanelMetrics metrics)

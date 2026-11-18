@@ -63,6 +63,7 @@ using osu.Game.EzOsuGame.Skills.Dan;
 using osu.Game.EzOsuGame.Skills.Mina;
 using osu.Game.EzOsuGame.Skills.PPP;
 using osu.Game.EzOsuGame.Skills.SkillTag;
+using osu.Game.EzOsuGame.Skills.SkillTag.KeyPattern;
 using osu.Game.EzOsuGame.Skills.SSR;
 using osu.Game.EzOsuGame.Startup;
 using osu.Game.EzOsuGame.WarmUp;
@@ -79,6 +80,7 @@ using osu.Game.Online.Chat;
 using osu.Game.Online.Leaderboards;
 using osu.Game.Online.Metadata;
 using osu.Game.Online.Multiplayer;
+using osu.Game.Online.RankedPlay;
 using osu.Game.Online.Spectator;
 using osu.Game.Overlays;
 using osu.Game.Overlays.Settings;
@@ -307,6 +309,8 @@ namespace osu.Game
 
         private RulesetConfigCache rulesetConfigCache;
 
+        private RankedPlayDivisionStore rankedPlayDivisionStore;
+
         private SessionAverageHitErrorTracker hitErrorTracker;
 
         protected SpectatorClient SpectatorClient { get; private set; }
@@ -494,6 +498,7 @@ namespace osu.Game
             var pppUnit = new EzPPPUnit(BeatmapManager, chartSkillStore, pppEngine);
             var danUnit = new EzDanUnit(ezAnalysisCache, chartSkillStore);
             var ssrUnit = new EzSSRUnit(BeatmapManager, chartSkillStore);
+            var keyPatternUnit = new EzKeyPatternUnit(BeatmapManager, chartSkillStore);
             var csiUnit = new EzCSIUnit(BeatmapManager, chartSkillStore, liveMetrics);
 
             var playerPPPAggregator = new EzPlayerPPPAggregator(BeatmapManager, playerSkillStore, pppEngine);
@@ -510,6 +515,7 @@ namespace osu.Game
             dependencies.Cache(msdUnit);
             dependencies.Cache(pppUnit);
             dependencies.Cache(ssrUnit);
+            dependencies.Cache(keyPatternUnit);
             dependencies.Cache(csiUnit);
             dependencies.Cache(danUnit);
 
@@ -548,6 +554,8 @@ namespace osu.Game
 
             dependencies.CacheAs<IRulesetConfigCache>(rulesetConfigCache = new RulesetConfigCache(realm, RulesetStore));
 
+            dependencies.CacheAs<IRankedPlayDivisionStore>(rankedPlayDivisionStore = new RankedPlayDivisionStore());
+
             var powerStatus = CreateBatteryInfo();
             if (powerStatus != null)
                 dependencies.CacheAs(powerStatus);
@@ -582,6 +590,8 @@ namespace osu.Game
             base.Content.Add(metadataClient);
 
             base.Content.Add(rulesetConfigCache);
+
+            base.Content.Add(rankedPlayDivisionStore);
 
             PreviewTrackManager previewTrackManager;
             dependencies.Cache(previewTrackManager = new PreviewTrackManager(BeatmapManager.BeatmapTrackStore));

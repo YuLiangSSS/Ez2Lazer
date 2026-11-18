@@ -44,7 +44,7 @@ namespace osu.Game.EzOsuGame.Analysis
     }
 
     /// <summary>
-    /// Mania-specific analysis summary for Mania (column-based) beatmaps.
+    /// Column layout for a mania chart. Stars and pp are <see cref="EzAnalysisResult.Ratings"/>.
     ///
     /// Contract (unified):
     /// - <see cref="ColumnCounts"/> contains the total number of hit objects in each column, including long notes (LNs).
@@ -63,14 +63,7 @@ namespace osu.Game.EzOsuGame.Analysis
         private readonly Dictionary<int, int>? columnCounts;
         private readonly Dictionary<int, int>? holdNoteCounts;
 
-        public static readonly EzManiaSummary EMPTY = new EzManiaSummary(null, null, null);
-
-        public double? SunnySR { get; }
-
-        // TODO: 仅预留字段。当前阶段不参与计算、不参与持久化版本升级，也不接入 UI / 本地化。
-        public double? SunnySRFullLN4 { get; }
-
-        public double? SunnySRFullLN8 { get; }
+        public static readonly EzManiaSummary EMPTY = new EzManiaSummary(null, null);
 
         /// <summary>
         /// Total number of hit objects in each column (includes both regular notes and LNs).
@@ -90,14 +83,10 @@ namespace osu.Game.EzOsuGame.Analysis
         /// </summary>
         public bool HasHoldNoteCounts => holdNoteCounts != null;
 
-        public EzManiaSummary(Dictionary<int, int>? columnCounts, Dictionary<int, int>? holdNoteCounts, double? sunnySR,
-                              double? sunnySRFullLN4 = null, double? sunnySRFullLN8 = null)
+        public EzManiaSummary(Dictionary<int, int>? columnCounts, Dictionary<int, int>? holdNoteCounts)
         {
             this.columnCounts = columnCounts;
             this.holdNoteCounts = holdNoteCounts;
-            SunnySR = sunnySR;
-            SunnySRFullLN4 = sunnySRFullLN4;
-            SunnySRFullLN8 = sunnySRFullLN8;
         }
     }
 
@@ -202,10 +191,48 @@ namespace osu.Game.EzOsuGame.Analysis
         public IReadOnlyDictionary<string, double> AxesOf(EzAnalysisSystem system) => Axes.GetValueOrDefault(system, no_axis_values);
 
         /// <summary>Star rating and pp of one system, absent when this pass produced neither.</summary>
-        public EzScalarRating RatingOf(EzAnalysisSystem system) => Ratings.GetValueOrDefault(system);
+        /// <remarks>KeyPattern has no rating of its own; it reads the Sunny pair.</remarks>
+        public EzScalarRating RatingOf(EzAnalysisSystem system)
+            => system == EzAnalysisSystem.KeyPattern
+                ? Ratings.GetValueOrDefault(EzAnalysisSystem.SSR)
+                : Ratings.GetValueOrDefault(system);
 
         public EzAnalysisResult WithTagSummary(EzBeatmapTagSummary? tagSummary) => CommonSummary is KpsSummary commonSummary
             ? new EzAnalysisResult(commonSummary, ManiaSummary, tagSummary, Axes, Ratings, Dan, KeyPatternRadar, SsrPatternRadar, ChartSkillInfo)
             : this;
+
+        public EzAnalysisResult WithPersistedKeyPattern(EzRadarChartData<string> radar, IReadOnlyDictionary<string, double> patternAxes,
+                                                        double? sunnySR = null, double? sunnyPP = null)
+        {
+            if (CommonSummary is not KpsSummary commonSummary)
+                return this;
+
+            var dictionary = new Dictionary<EzAnalysisSystem, IReadOnlyDictionary<string, double>>(Axes)
+            {
+                [EzAnalysisSystem.KeyPattern] = patternAxes,
+            };
+
+            IReadOnlyDictionary<EzAnalysisSystem, EzScalarRating> ratings = Ratings;
+
+            if (sunnySR is double star && double.IsFinite(star) && star > 0)
+            {
+                double? performance = sunnyPP is double points && double.IsFinite(points) && points > 0 ? points : null;
+                ratings = new Dictionary<EzAnalysisSystem, EzScalarRating>(Ratings)
+                {
+                    [EzAnalysisSystem.SSR] = new EzScalarRating(star, performance),
+                };
+            }
+
+            return new EzAnalysisResult(commonSummary, ManiaSummary, TagSummary, dictionary, ratings, Dan, radar, SsrPatternRadar, ChartSkillInfo);
+        }
+
+        /// <summary>Fills the Sunny skill radar from stored axes without replacing a radar the pass already measured.</summary>
+        public EzAnalysisResult WithPersistedSsrRadar(EzRadarChartData<string> radar)
+        {
+            if (CommonSummary is not KpsSummary commonSummary || SsrPatternRadar != null)
+                return this;
+
+            return new EzAnalysisResult(commonSummary, ManiaSummary, TagSummary, Axes, Ratings, Dan, KeyPatternRadar, radar, ChartSkillInfo);
+        }
     }
 }

@@ -354,6 +354,7 @@ namespace osu.Game.Screens.Select
                                                         Origin = Anchor.TopRight,
                                                         RelativeSizeAxes = Axes.X,
                                                         ScopedBeatmapSet = { BindTarget = ScopedBeatmapSet },
+                                                        RightRadarMode = { BindTarget = detailsArea.RightRadarMode },
                                                     },
                                                 }
                                             },

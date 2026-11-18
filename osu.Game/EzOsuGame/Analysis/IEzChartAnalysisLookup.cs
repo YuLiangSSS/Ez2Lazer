@@ -23,9 +23,12 @@ namespace osu.Game.EzOsuGame.Analysis
         EzAnalysisResult? TryGet(BeatmapInfo beatmap, IReadOnlyList<Mod>? mods);
 
         /// <summary>
-        /// The result for this chart + mods, computing it into the shared store when absent.
+        /// The result for this chart + mods, computing it when absent.
         /// </summary>
-        /// <remarks>Must not be called on the update thread: the pass is synchronous and heavy.</remarks>
+        /// <remarks>
+        /// Must not be called on the update thread: the pass is synchronous and heavy.
+        /// While on-demand analysis is off, the result is not published to <see cref="TryGet"/>.
+        /// </remarks>
         EzAnalysisResult? GetOrCompute(BeatmapInfo beatmap, RulesetInfo ruleset, IReadOnlyList<Mod>? mods);
     }
 }

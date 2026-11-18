@@ -56,9 +56,14 @@ namespace osu.Game.Skinning
         public Skin DefaultClassicSkin { get; }
 
         /// <summary>
-        /// The "retro" skin.
+        /// Retro skin from the external legacy folder when installed; otherwise a placeholder entry.
         /// </summary>
-        public Skin RetroSkin { get; }
+        public Skin RetroSkin { get; private set; }
+
+        /// <summary>
+        /// <see cref="SkinInfo"/> for <see cref="RetroSkin"/>.
+        /// </summary>
+        public Live<SkinInfo> RetroSkinInfo { get; private set; }
 
         private readonly AudioManager audio;
 
@@ -156,8 +161,6 @@ namespace osu.Game.Skinning
             {
                 PostNotification = obj => PostNotification?.Invoke(obj),
             };
-
-            RetroSkin = new RetroSkin(this);
 
             var defaultSkins = new[]
             {
@@ -634,23 +637,26 @@ namespace osu.Game.Skinning
             if (ScriptedSkinSupport.IsScriptedSkin(skin.SkinInfo))
                 return SaveScriptedSkinLayout(skin);
 
-            if (EzLegacySkinFolders.TryGetDirectory(skin.SkinInfo.Value, out string legacyDirectory))
+            return skin.SkinInfo.PerformRead(info =>
             {
-                bool written = skinImporter.Save(skin);
-
-                if (written)
+                if (EzLegacySkinFolders.TryGetDirectory(info, out string legacyDirectory))
                 {
-                    Logger.Log($"Wrote legacy skin layout to {legacyDirectory} (skin {skin.SkinInfo.Value.ID}, name {skin.SkinInfo.Value.Name}).",
-                        LoggingTarget.Runtime, LogLevel.Debug);
+                    bool written = skinImporter.Save(skin);
+
+                    if (written)
+                    {
+                        Logger.Log($"Wrote legacy skin layout to {legacyDirectory} (skin {info.ID}, name {info.Name}).",
+                            LoggingTarget.Runtime, LogLevel.Debug);
+                    }
+
+                    return written;
                 }
 
-                return written;
-            }
+                if (!skin.SkinInfo.IsManaged)
+                    throw new InvalidOperationException($"Attempting to save a skin which is not yet tracked. Call {nameof(EnsureMutableSkin)} first.");
 
-            if (!skin.SkinInfo.IsManaged)
-                throw new InvalidOperationException($"Attempting to save a skin which is not yet tracked. Call {nameof(EnsureMutableSkin)} first.");
-
-            return skinImporter.Save(skin);
+                return skinImporter.Save(skin);
+            });
         }
 
         /// <summary>
@@ -707,7 +713,23 @@ namespace osu.Game.Skinning
             lock (legacyCatalogLock)
                 legacySkinCatalog = scanned;
 
+            refreshRetroSkinReference();
             scheduler.Add(() => LegacySkinsCatalogUpdated?.Invoke());
+        }
+
+        private void refreshRetroSkinReference()
+        {
+            if (EzLegacySkinFolders.TryFindById(SkinInfo.RETRO_SKIN, out SkinInfo info))
+                RetroSkinInfo = info.ToLiveUnmanaged();
+            else
+                RetroSkinInfo = global::osu.Game.Skinning.RetroSkin.CreateInfo().ToLiveUnmanaged();
+
+            var previous = RetroSkin;
+            RetroSkin = GetSkin(RetroSkinInfo.Value);
+
+            if (previous != null && !ReferenceEquals(previous, RetroSkin)
+                && previous != trianglesSkin && previous != argonSkin && previous != DefaultClassicSkin)
+                previous.Dispose();
         }
 
         public void IntroduceLegacySkinStorage(IDialogOverlay dialogs)
