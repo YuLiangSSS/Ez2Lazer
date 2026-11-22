@@ -136,8 +136,8 @@ namespace osu.Game
 
         public virtual EndpointConfiguration CreateEndpoints()
         {
-            if (UseDevelopmentServer && GlobalConfigStore.UseDevelopmentEndpointsForTests)
-                return new DevelopmentEndpointConfiguration();
+            // if (UseDevelopmentServer && GlobalConfigStore.UseDevelopmentEndpointsForTests)
+            //     return new DevelopmentEndpointConfiguration();
 
             // 如果Ez2ConfigManager已初始化，根据服务器预设选择对应的配置
             if (Ez2ConfigManager != null)
@@ -156,7 +156,8 @@ namespace osu.Game
             Logger.Log("[EzServer] Switch server failed: Ez2ConfigManager not initialized. Falling back to default configuration.", Ez2ConfigManager.LOGGER_NAME, LogLevel.Debug);
 
             // 否则使用默认配置
-            return UseDevelopmentServer ? new DevelopmentEndpointConfiguration() : new ProductionEndpointConfiguration();
+            return new GuServerEndpointConfiguration();
+            // return UseDevelopmentServer ? new DevelopmentEndpointConfiguration() : new ProductionEndpointConfiguration();
         }
 
         protected override OnlineStore CreateOnlineStore() => new TrustedDomainOnlineStore();
@@ -171,7 +172,7 @@ namespace osu.Game
         public bool IsDeployedBuild => AssemblyVersion.Major > 0;
 
         /// <summary>
-        /// When true, unhandled errors may be submitted to ppy Sentry. Disabled for Ez2Lazer.
+        /// When true, errors logged by the game may be submitted to Sentry.
         /// </summary>
         public virtual bool SubmitErrorsToSentry => false;
 
