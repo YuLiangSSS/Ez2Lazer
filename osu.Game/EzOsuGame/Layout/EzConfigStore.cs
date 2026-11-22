@@ -2,7 +2,6 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -26,6 +25,7 @@ namespace osu.Game.EzOsuGame.Layout
         private static readonly JsonSerializerSettings json_settings = new JsonSerializerSettings
         {
             Formatting = Formatting.Indented,
+            NullValueHandling = NullValueHandling.Ignore,
         };
 
         private readonly Storage storage;
@@ -82,25 +82,34 @@ namespace osu.Game.EzOsuGame.Layout
             }
         }
 
-        public EzRulesetModLayout? GetModLayout(string ruleset)
+        public EzRulesetModLayout? GetModLayout(string rulesetKey) =>
+            GetModLayoutDocument().ToLayout(rulesetKey);
+
+        public EzModSelectLayoutMode ModSelectLayoutMode => GetModLayoutDocument().LayoutMode;
+
+        public void SaveModSelectLayoutMode(EzModSelectLayoutMode mode)
         {
-            if (string.IsNullOrEmpty(ruleset))
-                return null;
-
-            lock (saveLock)
-                return modLayout.Rulesets.GetValueOrDefault(ruleset);
-        }
-
-        public void SaveModLayout(string ruleset, EzRulesetModLayout layout)
-        {
-            if (string.IsNullOrEmpty(ruleset))
-                return;
-
             lock (saveLock)
             {
-                modLayout.Rulesets[ruleset] = layout;
+                modLayout.LayoutMode = mode;
                 writeText(EzModLayoutDocument.FILENAME, JsonConvert.SerializeObject(modLayout, json_settings));
             }
+        }
+
+        public void SaveModLayout(string rulesetKey, EzRulesetModLayout layout)
+        {
+            lock (saveLock)
+            {
+                layout.EnsureMutableLists();
+                modLayout.ApplyLayout(rulesetKey, layout);
+                writeText(EzModLayoutDocument.FILENAME, JsonConvert.SerializeObject(modLayout, json_settings));
+            }
+        }
+
+        internal EzModLayoutDocument GetModLayoutDocument()
+        {
+            lock (saveLock)
+                return modLayout;
         }
 
         private void reloadPreview()
@@ -142,9 +151,11 @@ namespace osu.Game.EzOsuGame.Layout
 
                     var loaded = JsonConvert.DeserializeObject<EzModLayoutDocument>(json, json_settings);
 
-                    if (loaded?.Rulesets == null)
+                    if (loaded == null)
                         return;
 
+                    modLayout.ColumnShear = loaded.ColumnShear;
+                    modLayout.LayoutMode = loaded.LayoutMode == EzModSelectLayoutMode.Vertical ? EzModSelectLayoutMode.Vertical : EzModSelectLayoutMode.Horizontal;
                     modLayout.Rulesets = loaded.Rulesets;
                 }
                 catch (Exception ex)

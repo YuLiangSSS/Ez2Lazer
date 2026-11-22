@@ -50,15 +50,40 @@ namespace osu.Game.EzOsuGame.Skills.SkillTag.KeyPattern
         /// </summary>
         public bool ComputeAndStore(BeatmapInfo beatmapInfo, CancellationToken cancellationToken = default)
         {
+            var result = TryCompute(beatmapInfo, cancellationToken);
+
+            if (result == null)
+                return false;
+
+            if (!result.RequiresStore)
+                return true;
+
+            if (result.Skills != null && result.BeatmapHash != null)
+            {
+                skillStore.WriteBeatmapSystemSkills(
+                    result.BeatmapHash,
+                    EzAnalysisSystem.KeyPattern,
+                    result.Skills,
+                    beatmapInfo.ID,
+                    algorithmVersion: VERSION,
+                    rulesetOnlineId: EzLocalProfileConstants.MANIA_RULESET_ID);
+            }
+
+            return true;
+        }
+
+        /// <summary>CPU-only half of KeyPattern axis backfill.</summary>
+        public EzKeyPatternMaintenanceResult? TryCompute(BeatmapInfo beatmapInfo, CancellationToken cancellationToken = default)
+        {
             ArgumentNullException.ThrowIfNull(beatmapInfo);
 
             if (!SupportsRuleset(beatmapInfo.Ruleset.OnlineID) || string.IsNullOrEmpty(beatmapInfo.Hash))
-                return true;
+                return EzKeyPatternMaintenanceResult.NoStoreRequired;
 
             double sunnySR = beatmapInfo.EzRatingData.SunnySR;
 
             if (!double.IsFinite(sunnySR) || sunnySR < 0)
-                return true;
+                return EzKeyPatternMaintenanceResult.NoStoreRequired;
 
             IBeatmap playable;
 
@@ -68,12 +93,16 @@ namespace osu.Game.EzOsuGame.Skills.SkillTag.KeyPattern
             }
             catch (Exception e) when (e is not ObjectDisposedException)
             {
-                return false;
+                return null;
             }
 
             var chart = EzCSIEngine.FromPlayable(playable, cancellationToken);
-            Write(skillStore, beatmapInfo, chart, sunnySR, cancellationToken);
-            return true;
+            var skills = BuildSkillsForPersistence(chart, sunnySR, cancellationToken);
+
+            if (skills == null)
+                return EzKeyPatternMaintenanceResult.NoStoreRequired;
+
+            return new EzKeyPatternMaintenanceResult(true, beatmapInfo.Hash, skills);
         }
 
         public static void Write(
@@ -90,21 +119,39 @@ namespace osu.Game.EzOsuGame.Skills.SkillTag.KeyPattern
             if (string.IsNullOrEmpty(beatmapInfo.Hash))
                 return;
 
-            var relative = ComputeRadar(chart, cancellationToken);
-            bool emptyChart = chart.Notes.Count == 0;
+            var skills = BuildSkillsForPersistence(chart, sunnySR, cancellationToken);
 
-            if (!emptyChart && !IsQuantifiableSunny(sunnySR))
+            if (skills == null)
                 return;
-
-            var stored = emptyChart ? relative : Quantify(relative, sunnySR);
 
             skillStore.WriteBeatmapSystemSkills(
                 beatmapInfo.Hash,
                 EzAnalysisSystem.KeyPattern,
-                ToSkills(stored),
+                skills,
                 beatmapInfo.ID,
                 algorithmVersion: VERSION,
                 rulesetOnlineId: EzLocalProfileConstants.MANIA_RULESET_ID);
+        }
+
+        /// <summary>Skill rows for persistence without touching Realm.</summary>
+        public static IReadOnlyDictionary<string, double>? BuildSkillsForPersistence(EzManiaChartInput chart, double sunnySR, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(chart);
+
+            var relative = ComputeRadar(chart, cancellationToken);
+            return BuildSkillsForPersistence(chart, relative, sunnySR);
+        }
+
+        public static IReadOnlyDictionary<string, double>? BuildSkillsForPersistence(EzManiaChartInput chart, EzRadarChartData<string> relative, double sunnySR)
+        {
+            ArgumentNullException.ThrowIfNull(chart);
+
+            bool emptyChart = chart.Notes.Count == 0;
+
+            if (!emptyChart && !IsQuantifiableSunny(sunnySR))
+                return null;
+
+            return ToSkills(emptyChart ? relative : Quantify(relative, sunnySR));
         }
 
         /// <summary>Relative 0–10 scores for the five persistable axes. No LN%.</summary>

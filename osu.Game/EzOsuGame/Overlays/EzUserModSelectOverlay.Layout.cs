@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
@@ -38,24 +39,38 @@ namespace osu.Game.EzOsuGame.Overlays
         private readonly List<ModState> hiddenStates = new List<ModState>();
 
         private EzConfigStore configStore = null!;
-        private OsuGameBase game = null!;
         private EzModHiddenPool pool = null!;
+        private Container hiddenPoolArea = null!;
         private ShearedButton editButton = null!;
         private ShearedButton newGroupButton = null!;
+        private EzModLayoutShearControl shearControl = null!;
+        private FillFlowContainer editToolbar = null!;
         private DragGhost dragGhost = null!;
+        private Box insertionMarker = null!;
+        private OsuSpriteText emptyResults = null!;
+        internal EzModLayoutModeButton LayoutModeButton { get; private set; } = null!;
+
+        public EzModSelectLayoutMode LayoutMode { get; private set; }
+        private readonly double[] scrollPositions = new double[2];
+        private ModSelectContent? restoreScrollView;
+        private double restoreScrollAt;
+        private int restoreScrollFrames;
+        private bool dragging => draggingAcronym != null || draggingColumn != null;
 
         private EzRulesetModLayout? working;
-        private string? loadedRuleset;
+        private string? workingRulesetKey;
         private string? draggingAcronym;
         private EzModGroupColumn? draggingColumn;
         private Vector2 lastDragPosition;
         private bool applyScheduled;
 
+        private string modLayoutRulesetKey =>
+            string.IsNullOrEmpty(Ruleset.Value?.ShortName) ? "osu" : Ruleset.Value.ShortName;
+
         [BackgroundDependencyLoader]
-        private void loadLayout(EzConfigStore modLayoutStore, OsuGameBase osuGame)
+        private void loadLayout(EzConfigStore modLayoutStore)
         {
             configStore = modLayoutStore;
-            game = osuGame;
             loadEzSongSelectKeyboardHandler();
         }
 
@@ -70,20 +85,27 @@ namespace osu.Game.EzOsuGame.Overlays
             });
         }
 
-        protected override void AssignModsToColumns()
-        {
-            string? ruleset = currentRuleset();
+        protected override void AssignModsToColumns() => Scheduler.AddOnce(assignModsToColumns);
 
-            if (editing.Value && loadedRuleset != null && loadedRuleset != ruleset)
-                saveWorking();
+        private void assignModsToColumns()
+        {
+            string key = modLayoutRulesetKey;
+
+            if (working != null && workingRulesetKey != key)
+            {
+                if (editing.Value && workingRulesetKey != null)
+                    configStore.SaveModLayout(workingRulesetKey, working);
+
+                editing.Value = false;
+                working = null;
+            }
 
             var entries = new List<EzModLayoutMod>();
             var states = collectStates(entries);
-            bool sameRuleset = loadedRuleset != null && loadedRuleset == ruleset;
-            EzRulesetModLayout? source = sameRuleset ? working : ruleset == null ? null : configStore.GetModLayout(ruleset);
+            EzRulesetModLayout? source = editing.Value && working != null ? working : configStore.GetModLayout(modLayoutRulesetKey);
 
-            working = EzModLayoutResolver.Resolve(source, entries);
-            loadedRuleset = ruleset;
+            working = EzModLayoutResolver.Resolve(source, entries, preserveUnavailable: true);
+            workingRulesetKey = key;
             applyLayout(states);
         }
 
@@ -100,6 +122,8 @@ namespace osu.Game.EzOsuGame.Overlays
 
         public override void Hide()
         {
+            if (dragging)
+                cancelDrag();
             if (editing.Value)
                 finishEditing();
 
@@ -114,10 +138,28 @@ namespace osu.Game.EzOsuGame.Overlays
                 Dragged = moveDrag,
                 DragEnded = endModDrag,
             };
-            MainAreaContent.Add(pool);
+            MainAreaContent.Add(hiddenPoolArea = new Container
+            {
+                RelativeSizeAxes = Axes.Both,
+                Depth = -1,
+                Child = pool,
+            });
 
             dragGhost = new DragGhost();
             MainAreaContent.Add(dragGhost);
+            insertionMarker = new Box { Alpha = 0, Depth = float.MinValue, Colour = Colour4.White };
+            MainAreaContent.Add(insertionMarker);
+            MainAreaContent.Add(emptyResults = new OsuSpriteText
+            {
+                Text = EzModLayoutStrings.NO_RESULTS,
+                Font = OsuFont.TorusAlternate.With(size: 20),
+                Anchor = Anchor.Centre,
+                Origin = Anchor.Centre,
+                Alpha = 0,
+            });
+
+            LayoutModeButton = new EzModLayoutModeButton { Alpha = 0 };
+            LayoutModeButton.Active.BindValueChanged(change => SetLayoutMode(change.NewValue ? EzModSelectLayoutMode.Vertical : EzModSelectLayoutMode.Horizontal));
 
             editButton = new ShearedButton
             {
@@ -125,7 +167,6 @@ namespace osu.Game.EzOsuGame.Overlays
                 Width = 110,
                 Height = 42,
                 TextSize = 16,
-                Position = new Vector2(312, 0),
                 Action = toggleEditing,
             };
             newGroupButton = new ShearedButton
@@ -134,23 +175,51 @@ namespace osu.Game.EzOsuGame.Overlays
                 Width = 140,
                 Height = 42,
                 TextSize = 16,
-                Position = new Vector2(430, 0),
                 Alpha = 0,
                 Action = addGroup,
             };
-            AddAboveColumns(editButton);
-            AddAboveColumns(newGroupButton);
+            shearControl = new EzModLayoutShearControl { Alpha = 0 };
+
+            editToolbar = new FillFlowContainer
+            {
+                Direction = FillDirection.Horizontal,
+                Spacing = new Vector2(10, 0),
+                AutoSizeAxes = Axes.Both,
+                Position = new Vector2(312, 0),
+                Children = new Drawable[] { editButton, newGroupButton, LayoutModeButton, shearControl },
+            };
+
+            AddAboveColumns(editToolbar);
+
+            LayoutMode = configStore.ModSelectLayoutMode;
+            if (LayoutMode == EzModSelectLayoutMode.Vertical)
+                ReplaceContentView(new EzModSelectVerticalContent(ShowPresets));
+
+            updateModeButton();
 
             base.LoadComplete();
+
+            shearControl.Current.BindValueChanged(change =>
+            {
+                if (working == null)
+                    return;
+
+                working.ColumnShear = (float)change.NewValue;
+                SetEzColumnFlowShearX(working.ColumnShear.Value);
+            });
 
             editing.BindValueChanged(change =>
             {
                 editButton.Text = change.NewValue ? EzModLayoutStrings.DONE : EzModLayoutStrings.EDIT;
                 newGroupButton.Alpha = change.NewValue ? 1 : 0;
-                SetColumnFlowBottomPadding(change.NewValue ? pool_height + 8 : column_padding_rest);
+                LayoutModeButton.Alpha = change.NewValue ? 1 : 0;
+                LayoutModeButton.Enabled.Value = change.NewValue && !dragging;
+                shearControl.Alpha = change.NewValue ? 1 : 0;
+                SetColumnFlowBottomPadding(column_padding_rest);
 
                 if (change.NewValue)
                 {
+                    shearControl.Current.Value = EzModLayoutResolver.NormaliseColumnShear(working?.ColumnShear);
                     pool.MoveToY(16);
                     pool.FadeIn(180);
                     pool.MoveToY(0, 220, Easing.OutQuint);
@@ -161,7 +230,137 @@ namespace osu.Game.EzOsuGame.Overlays
                 }
             }, true);
 
-            SearchTextBox.Current.BindValueChanged(term => pool.SearchTerm = term.NewValue, true);
+            SearchTextBox.Current.BindValueChanged(term =>
+            {
+                pool.SearchTerm = term.NewValue;
+                restoreScrollView = null;
+                Array.Clear(scrollPositions);
+                ContentView.RestoreScroll(0);
+                RefreshSearchPreselection();
+            }, true);
+
+            Ruleset.BindValueChanged(change =>
+            {
+                cancelDrag();
+
+                foreach (var column in groupColumns)
+                    column.CommitRename();
+
+                if (editing.Value && working != null && workingRulesetKey != modLayoutRulesetKey)
+                {
+                    string oldKey = string.IsNullOrEmpty(change.OldValue?.ShortName) ? "osu" : change.OldValue.ShortName;
+                    configStore.SaveModLayout(oldKey, working);
+                }
+
+                editing.Value = false;
+
+                if (workingRulesetKey != modLayoutRulesetKey)
+                {
+                    working = null;
+                    workingRulesetKey = null;
+                }
+                Array.Clear(scrollPositions);
+                restoreScrollView = null;
+                ContentView.RestoreScroll(0);
+            });
+        }
+
+        internal void SetLayoutMode(EzModSelectLayoutMode mode)
+        {
+            if (mode == LayoutMode || dragging)
+                return;
+
+            foreach (var column in groupColumns)
+                column.CommitRename();
+
+            ContentView.FlushPendingSelections();
+            scrollPositions[(int)LayoutMode] = ContentView.ScrollPosition;
+            LayoutMode = mode;
+
+            ReplaceContentView(mode == EzModSelectLayoutMode.Vertical
+                ? new EzModSelectVerticalContent(ShowPresets)
+                : new HorizontalModSelectContent(CreateColumns()));
+
+            if (working == null)
+                AssignModsToColumns();
+            else
+                applyLayout(collectStates(null));
+
+            foreach (var column in ContentView.Columns)
+                column.SearchTerm = SearchTerm;
+
+            ContentView.Colour = CustomisationPanel.ExpandedState.Value == ModCustomisationPanel.ModCustomisationPanelState.Collapsed
+                ? Colour4.White
+                : OsuColour.Gray(0.5f);
+            SetColumnFlowBottomPadding(column_padding_rest);
+            updateModeButton();
+            configStore.SaveModSelectLayoutMode(mode);
+
+            restoreScrollView = ContentView;
+            restoreScrollAt = scrollPositions[(int)mode];
+            restoreScrollFrames = 0;
+        }
+
+        protected override void UpdateAfterChildren()
+        {
+            base.UpdateAfterChildren();
+
+            if (restoreScrollView != ContentView || !groupColumns.All(column => column.IsLoaded && column.ItemsLoaded))
+                return;
+
+            if (++restoreScrollFrames < 3)
+                return;
+
+            ContentView.RestoreScroll(restoreScrollAt);
+            restoreScrollView = null;
+            RefreshSearchPreselection();
+        }
+
+        private void cancelDrag()
+        {
+            draggingAcronym = null;
+            draggingColumn = null;
+            hideGhost();
+        }
+
+        private void updateModeButton() => LayoutModeButton.Active.Value = LayoutMode == EzModSelectLayoutMode.Vertical;
+
+        protected override void Update()
+        {
+            base.Update();
+
+            float availableWidth = AboveColumnsContent.DrawWidth - AboveColumnsContent.Padding.TotalHorizontal;
+            float remainingWidth = availableWidth - editToolbar.DrawWidth - 28;
+            CustomisationPanel.Width = Math.Clamp(remainingWidth * 400 / 700, 220, 400);
+            SearchTextBox.Width = Math.Clamp(remainingWidth - CustomisationPanel.Width, 160, 300);
+            float headerWidth = SearchTextBox.Width + 12 + editToolbar.DrawWidth + 16 + CustomisationPanel.Width;
+            float headerScale = Math.Min(1, Math.Max(1, availableWidth) / headerWidth);
+            SearchTextBox.Scale = editToolbar.Scale = CustomisationPanel.Scale = new Vector2(headerScale);
+            editToolbar.Position = new Vector2((SearchTextBox.Width + 12) * headerScale, 0);
+            CustomisationPanel.Y = 0;
+            CustomisationPanel.RelativeSizeAxes = Axes.None;
+
+            float footerTop = DisplayedFooterContent != null
+                ? MainAreaContent.ToLocalSpace(DisplayedFooterContent.ScreenSpaceDrawQuad.TopLeft).Y
+                : MainAreaContent.DrawHeight - MainAreaContent.Padding.Bottom;
+            float footerClearance = Math.Max(0, MainAreaContent.DrawHeight - MainAreaContent.Padding.Bottom - footerTop + AboveColumnsContent.Padding.Bottom);
+            float contentBottom = footerClearance + (editing.Value ? pool_height + 16 : 16);
+            hiddenPoolArea.Padding = new MarginPadding { Bottom = footerClearance };
+            CustomisationPanel.Height = Math.Max(0, MainAreaContent.DrawHeight - MainAreaContent.Padding.TotalVertical - contentBottom) / headerScale;
+            float contentTop = Math.Max(SearchTextBox.DrawHeight, editToolbar.DrawHeight) * headerScale + 36;
+            SetContentAreaPadding(new MarginPadding { Top = contentTop, Bottom = contentBottom });
+            LayoutModeButton.Enabled.Value = editing.Value && !dragging;
+            emptyResults.Alpha = !editing.Value && SearchTerm.Length > 0
+                && groupColumns.All(column => column.AvailableMods.All(state => !state.Visible))
+                && ContentView.Columns.OfType<ModPresetColumn>().All(column => !column.HasMatchingPresets)
+                    ? 1
+                    : 0;
+
+            if (dragging)
+            {
+                ContentView.AutoScroll(lastDragPosition, Time.Elapsed);
+                updateInsertionMarker();
+            }
         }
 
         private void toggleEditing()
@@ -186,26 +385,19 @@ namespace osu.Game.EzOsuGame.Overlays
             if (!editing.Value || working == null)
                 return;
 
-            EzModLayoutResolver.AddGroup(working, EzModLayoutStrings.NEW_GROUP.ToString());
+            EzModLayoutResolver.AddGroup(working, EzModLayoutStrings.NEW_GROUP);
             scheduleApply();
         }
 
         private void saveWorking()
         {
-            if (loadedRuleset == null || working == null)
+            if (working == null)
                 return;
 
-            configStore.SaveModLayout(loadedRuleset, working);
-        }
-
-        private string? currentRuleset()
-        {
-            var ruleset = game.Ruleset.Value;
-
-            if (ruleset == null || string.IsNullOrEmpty(ruleset.ShortName))
-                return null;
-
-            return ruleset.ShortName;
+            var entries = new List<EzModLayoutMod>();
+            collectStates(entries);
+            working = EzModLayoutResolver.Resolve(working, entries, preserveUnavailable: true);
+            configStore.SaveModLayout(modLayoutRulesetKey, working);
         }
 
         private Dictionary<string, ModState> collectStates(List<EzModLayoutMod>? entries)
@@ -231,6 +423,8 @@ namespace osu.Game.EzOsuGame.Overlays
             if (working == null)
                 return;
 
+            working.EnsureMutableLists();
+
             hiddenStates.Clear();
 
             foreach (string acronym in working.Hidden)
@@ -240,12 +434,13 @@ namespace osu.Game.EzOsuGame.Overlays
             }
 
             groupColumns.Clear();
-            var next = new List<ColumnDimContainer>();
+            var next = new List<ModColumn>();
             int hotkeyIndex = 0;
 
             foreach (var group in working.Groups)
             {
-                var mods = new List<ModState>(group.Acronyms.Count);
+                group.EnsureMutableLists();
+                var mods = new List<ModState>();
 
                 foreach (string acronym in group.Acronyms)
                 {
@@ -256,9 +451,10 @@ namespace osu.Game.EzOsuGame.Overlays
                 Key[]? keys = hotkeyIndex < hotkey_rows.Length ? hotkey_rows[hotkeyIndex] : null;
                 hotkeyIndex++;
 
-                var column = new EzModGroupColumn(group, editing, keys)
+                bool vertical = LayoutMode == EzModSelectLayoutMode.Vertical;
+                var column = new EzModGroupColumn(group, editing, keys, vertical)
                 {
-                    Margin = new MarginPadding { Right = 10 },
+                    Margin = new MarginPadding { Right = vertical ? 0 : 10 },
                     SearchTerm = SearchTextBox.Current.Value,
                     PanelDragStarted = (panel, position) => beginModDrag(panel.Mod.Acronym, position),
                     PanelDragged = moveDrag,
@@ -272,11 +468,23 @@ namespace osu.Game.EzOsuGame.Overlays
 
                 column.AvailableMods = mods;
                 groupColumns.Add(column);
-                next.Add(new ColumnDimContainer(column));
+                next.Add(column);
             }
 
             ReplaceModColumns(next);
             pool.SetMods(hiddenStates);
+            applyWorkingColumnShear();
+        }
+
+        private void applyWorkingColumnShear()
+        {
+            float shear = EzModLayoutResolver.NormaliseColumnShear(working?.ColumnShear);
+            SetEzColumnFlowShearX(shear);
+
+            if (!editing.Value)
+                return;
+
+            shearControl.Current.Value = shear;
         }
 
         private void scheduleApply()
@@ -359,18 +567,9 @@ namespace osu.Game.EzOsuGame.Overlays
             if (from < 0)
                 return;
 
-            int to = 0;
-
-            foreach (var other in groupColumns)
-            {
-                if (other == column)
-                    continue;
-
-                if (position.X < other.ScreenSpaceDrawQuad.Centre.X)
-                    break;
-
-                to++;
-            }
+            bool vertical = LayoutMode == EzModSelectLayoutMode.Vertical;
+            int to = EzModLayoutGeometry.GroupInsertionIndex(groupColumns.Where(other => other != column)
+                .Select(other => vertical ? other.ScreenSpaceDrawQuad.Centre.Y : other.ScreenSpaceDrawQuad.Centre.X), vertical ? position.Y : position.X);
 
             EzModLayoutResolver.MoveGroup(working, from, to);
             scheduleApply();
@@ -391,6 +590,7 @@ namespace osu.Game.EzOsuGame.Overlays
                 return;
 
             EzModLayoutResolver.RenameGroup(working, column.GroupId, name);
+            working.EnsureMutableLists();
 
             for (int i = 0; i < working.Groups.Count; i++)
             {
@@ -413,7 +613,44 @@ namespace osu.Game.EzOsuGame.Overlays
         private Vector2 toContentSpace(Vector2 screenPosition) =>
             MainAreaContent.ToLocalSpace(screenPosition) - MainAreaContent.ChildOffset;
 
-        private void hideGhost() => dragGhost.Alpha = 0;
+        private void hideGhost()
+        {
+            dragGhost.Alpha = 0;
+            insertionMarker.Alpha = 0;
+        }
+
+        private void updateInsertionMarker()
+        {
+            insertionMarker.Alpha = 0;
+
+            foreach (var column in groupColumns)
+            {
+                if (!column.ScreenSpaceDrawQuad.Contains(lastDragPosition))
+                    continue;
+
+                bool vertical = LayoutMode == EzModSelectLayoutMode.Vertical;
+                var position = column.ToScreenSpace(Vector2.Zero);
+
+                if (draggingAcronym != null)
+                {
+                    var marker = column.InsertionMarker(lastDragPosition, draggingAcronym);
+                    insertionMarker.Position = toContentSpace(marker.Position);
+                    insertionMarker.Size = marker.Size;
+                }
+                else
+                {
+                    if (vertical && lastDragPosition.Y > column.ScreenSpaceDrawQuad.Centre.Y)
+                        position = column.ToScreenSpace(new Vector2(0, column.DrawHeight));
+                    else if (!vertical && lastDragPosition.X > column.ScreenSpaceDrawQuad.Centre.X)
+                        position = column.ToScreenSpace(new Vector2(column.DrawWidth, 0));
+
+                    insertionMarker.Position = toContentSpace(position);
+                    insertionMarker.Size = vertical ? new Vector2(column.DrawWidth, 3) : new Vector2(3, column.DrawHeight);
+                }
+                insertionMarker.Alpha = 0.8f;
+                break;
+            }
+        }
 
         private partial class DragGhost : Container
         {
