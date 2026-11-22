@@ -77,7 +77,7 @@ namespace osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod
         public BindableDouble DurationLimit { get; set; } = new BindableDouble(5)
         {
             MinValue = 0,
-            MaxValue = 15,
+            MaxValue = 50,
             Precision = 0.5
         };
 
