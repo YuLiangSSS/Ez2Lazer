@@ -90,6 +90,8 @@ namespace osu.Game.EzOsuGame.Configuration
             #region 全局游戏与界面设置
 
             SetDefault(Ez2Setting.ScalingGameMode, ScalingGameMode.Mania);
+            SetDefault(Ez2Setting.GameplayObjectAntialiasing, false);
+            SetDefault(Ez2Setting.ScaleSkinElements, false);
             SetDefault(Ez2Setting.GameplayDisableCmdSpace, true);
 
             SetDefault(Ez2Setting.AccuracyCutoffS, 0.95, 0.95, 1, 0.005);
@@ -1040,6 +1042,8 @@ namespace osu.Game.EzOsuGame.Configuration
     {
         // 游戏设置
         ScalingGameMode,
+        GameplayObjectAntialiasing,
+        ScaleSkinElements,
         GameplayDisableCmdSpace,
         AccuracyCutoffS,
         AccuracyCutoffA,

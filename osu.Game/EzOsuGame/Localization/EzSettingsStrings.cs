@@ -11,6 +11,8 @@ namespace osu.Game.EzOsuGame.Localization
 
         public static readonly EzLocalizationManager.EzLocalisableString SCALING_GAME_MODE = new EzLocalizationManager.EzLocalisableString("缩放游戏模式", "Scaling Game Mode");
 
+        public static readonly EzLocalizationManager.EzLocalisableString SCALE_SKIN_ELEMENTS = new EzLocalizationManager.EzLocalisableString("缩放皮肤元素", "Scale skin elements");
+
         public static readonly EzLocalizationManager.EzLocalisableString SCALING_GAME_MODE_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
             "缩放游戏模式会根据当前游戏模式自动调整界面元素的大小。"
             + "\n开启后，界面元素会根据当前游戏模式进行缩放，以提供更适合的视觉体验。"
@@ -30,6 +32,12 @@ namespace osu.Game.EzOsuGame.Localization
         public static readonly EzLocalizationManager.EzLocalisableString SETTINGS_TITLE = new EzLocalizationManager.EzLocalisableString("设置", "Settings");
         public static readonly EzLocalizationManager.EzLocalisableString SAVE_BUTTON = new EzLocalizationManager.EzLocalisableString("保存", "Save");
         public static readonly EzLocalizationManager.EzLocalisableString CANCEL_BUTTON = new EzLocalizationManager.EzLocalisableString("取消", "Cancel");
+
+        public static readonly EzLocalizationManager.EzLocalisableString GAMEPLAY_OBJECT_ANTIALIASING = new EzLocalizationManager.EzLocalisableString("游戏物件抗锯齿", "Gameplay object anti-aliasing");
+
+        public static readonly EzLocalizationManager.EzLocalisableString GAMEPLAY_OBJECT_ANTIALIASING_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
+            "对游玩区域进行 2 倍超采样，包括轨道背景、边框和判定效果，不影响 HUD 与菜单。开启后会增加显卡负载。",
+            "Supersamples the playfield at 2x, including lane backgrounds, borders, and judgement effects. HUD and menus are unchanged. Increases GPU load.");
 
         #endregion
 
