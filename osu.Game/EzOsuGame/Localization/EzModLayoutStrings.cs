@@ -16,6 +16,12 @@ namespace osu.Game.EzOsuGame.Localization
         public static readonly EzLocalizationManager.EzLocalisableString VERTICAL =
             new EzLocalizationManager.EzLocalisableString("纵向", "Vertical");
 
+        public static readonly EzLocalizationManager.EzLocalisableString EXPANDED =
+            new EzLocalizationManager.EzLocalisableString("展开", "Expanded");
+
+        public static readonly EzLocalizationManager.EzLocalisableString COMPACT =
+            new EzLocalizationManager.EzLocalisableString("压缩", "Compact");
+
         public static readonly EzLocalizationManager.EzLocalisableString EDIT =
             new EzLocalizationManager.EzLocalisableString("编辑", "Edit");
 
@@ -30,9 +36,6 @@ namespace osu.Game.EzOsuGame.Localization
 
         public static readonly EzLocalizationManager.EzLocalisableString COLUMN_SHEAR =
             new EzLocalizationManager.EzLocalisableString("倾斜角度", "Column shear");
-
-        public static readonly EzLocalizationManager.EzLocalisableString COLUMN_SHEAR_TOOLTIP = new EzLocalizationManager.EzLocalisableString(
-            "左右拖动调整列倾斜，单击重置", "Drag left/right to adjust column shear, click to reset");
 
         public static readonly EzLocalizationManager.EzLocalisableString DELETE_GROUP =
             new EzLocalizationManager.EzLocalisableString("删除分组", "Delete group");

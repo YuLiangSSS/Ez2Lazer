@@ -31,6 +31,23 @@ namespace osu.Game.Overlays.Settings.Sections.UserInterface
                 {
                     Keywords = new[] { "converts", "converted" }
                 },
+                new SettingsItemV2(new FormCheckBox
+                {
+                    Caption = EzSongSelectStrings.PANEL_RANK_FOLLOWS_MOD_FILTER,
+                    HintText = EzSongSelectStrings.PANEL_RANK_FOLLOWS_MOD_FILTER_TOOLTIP,
+                    Current = ezConfig.GetBindable<bool>(Ez2Setting.SongSelectPanelRankFollowsModFilter),
+                })
+                {
+                    Keywords = new[] { "rank", "grade", "mod", "score", "panel", "评级", "mod筛选" }
+                },
+                new SettingsItemV2(new SortDirectionDropdown
+                {
+                    Caption = EzSongSelectStrings.SORT_DIRECTION,
+                    Current = ezConfig.GetBindable<SortDirection>(Ez2Setting.SongSelectSortDirection),
+                })
+                {
+                    Keywords = new[] { "sort", "ascending", "descending", "order" },
+                },
                 new SettingsItemV2(new FormEnumDropdown<RandomSelectAlgorithm>
                 {
                     Caption = UserInterfaceStrings.RandomSelectionAlgorithm,
@@ -101,6 +118,16 @@ namespace osu.Game.Overlays.Settings.Sections.UserInterface
                 {
                     Keywords = new[] { "dim", "cover", "card", "carousel", "brightness", "song select", "选歌", "传送带", "卡片", "封面", "暗度", "亮度" }
                 },
+            };
+        }
+
+        private partial class SortDirectionDropdown : FormEnumDropdown<SortDirection>
+        {
+            protected override LocalisableString GenerateItemText(SortDirection item) => item switch
+            {
+                SortDirection.Ascending => EzSongSelectStrings.SORT_DIRECTION_ASCENDING,
+                SortDirection.Descending => EzSongSelectStrings.SORT_DIRECTION_DESCENDING,
+                _ => base.GenerateItemText(item),
             };
         }
     }

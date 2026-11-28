@@ -13,12 +13,14 @@ using osu.Framework.Bindables;
 using osu.Framework.Configuration;
 using osu.Framework.Development;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Framework.Platform;
 using osu.Game.Configuration;
 using osu.Game.EzOsuGame.HUD;
 using osu.Game.EzOsuGame.Online;
 using osu.Game.EzOsuGame.Scoring;
 using osu.Game.EzOsuGame.Scoring.Bonus;
+using osu.Game.Overlays;
 using osu.Game.Rulesets;
 using osu.Game.Scoring;
 
@@ -91,6 +93,8 @@ namespace osu.Game.EzOsuGame.Configuration
 
             SetDefault(Ez2Setting.ScalingGameMode, ScalingGameMode.Mania);
             SetDefault(Ez2Setting.GameplayObjectAntialiasing, false);
+            SetDefault(Ez2Setting.PlayfieldWeatherEffect, WeatherEffect.None);
+            SetDefault(Ez2Setting.PlayfieldWeatherIntensity, 1.0, 0.0, 1.0, 0.05);
             SetDefault(Ez2Setting.ScaleSkinElements, false);
             SetDefault(Ez2Setting.GameplayDisableCmdSpace, true);
 
@@ -105,11 +109,16 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.AnalysisSystemSelection, string.Empty);
             SetDefault(Ez2Setting.SongSelectSkillSortAxis, string.Empty);
             SetDefault(Ez2Setting.SongSelectSkillGroupAxis, string.Empty);
+            SetDefault(Ez2Setting.SongSelectSortDirection, SortDirection.Ascending);
+            SetDefault(Ez2Setting.SongSelectPanelRankFollowsModFilter, true);
             SetDefault(Ez2Setting.HideMainMenuOnlineBanner, false);
 
             // 隐藏成绩：选歌左侧成绩栏与结算页面的 Accuracy / Score / MaxCombo / 判定数量数字以 * 显示。
             SetDefault(Ez2Setting.HideScores, false);
 
+            SetDefault(Ez2Setting.BackgroundWeatherEffect, WeatherEffect.None);
+            SetDefault(Ez2Setting.BackgroundWeatherIntensity, 1.0, 0.0, 1.0, 0.05);
+            SetDefault(Ez2Setting.MainMenuWeatherEnabled, true);
             SetDefault(Ez2Setting.MenuLogoPath, @"Menu/logo");
             SetDefault(Ez2Setting.MenuLogoText, "(´・ω・｀),120");
             SetDefault(Ez2Setting.MenuLogoVisualisationStyle, EzLogoVisualisationStyle.RadialBars);
@@ -118,6 +127,7 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.MenuLogoBackdropBlur, 10.0, 0.0, 40.0, 1.0);
             SetDefault(Ez2Setting.MenuLogoBackdropOpacity, 1.0, 0.0, 1.0, 0.01);
             SetDefault(Ez2Setting.SongSelectUseEzBackground, false);
+            SetDefault(Ez2Setting.BackgroundWeatherAnimationSpeed, 1.0, 0.0, 10.0, 0.1);
             SetDefault(Ez2Setting.NotificationBehaviour, EzNotificationBehaviour.Normal);
             SetDefault(Ez2Setting.ScreenshotAction, EzScreenshotAction.SaveAndCopy);
             SetDefault(Ez2Setting.HitObjectLifetimeUsesOwnTime, !DebugUtils.IsNUnitRunning);
@@ -133,6 +143,24 @@ namespace osu.Game.EzOsuGame.Configuration
             SetDefault(Ez2Setting.CatchScratchDashExitVelocity, 0.00010, 0.00010, 0.00020, 0.00001);
             SetDefault(Ez2Setting.ScratchAxisInvert, false);
             SetDefault(Ez2Setting.SkipWithGameplayKeys, true);
+            SetDefault(Ez2Setting.PlayfieldWeatherAnimationSpeed, 1.0, 0.0, 10.0, 0.1);
+
+            SetDefault(Ez2Setting.WeatherDesertHeatAmplitude, 4.0, 0.0, 32.0, 0.1);
+            SetDefault(Ez2Setting.WeatherDesertHeatScale, 0.5, 0.1, 8.0, 0.1);
+            SetDefault(Ez2Setting.WeatherDesertHeatTint, 0.15, 0.0, 1.0, 0.01);
+
+            SetDefault(Ez2Setting.WeatherUnderwaterScale, 0.1, 0.1, 1.0, 0.01);
+            SetDefault(Ez2Setting.WeatherUnderwaterBrightness, 0.65, 0.0, 2.0, 0.05);
+            SetDefault(Ez2Setting.WeatherUnderwaterTint, 0.2, 0.0, 1.0, 0.01);
+
+            SetDefault(Ez2Setting.WeatherOvercastRainDensity, 0.2, 0.0, 1.0, 0.01);
+            SetDefault(Ez2Setting.WeatherOvercastRainWind, 4.5, -10.0, 10.0, 0.05);
+            SetDefault(Ez2Setting.WeatherOvercastRainCloudiness, 0.4, 0.0, 1.0, 0.01);
+
+            SetDefault(Ez2Setting.WeatherLightCurtainScale, 1.0, 0.1, 8.0, 0.1);
+            SetDefault(Ez2Setting.WeatherLightCurtainBrightness, 0.5, 0.0, 2.0, 0.05);
+            SetDefault(Ez2Setting.WeatherLightCurtainFalloff, 2.0, 0.1, 8.0, 0.1);
+            SetDefault(Ez2Setting.WeatherLightCurtainSway, 1, 0.0, 1.0, 0.01);
 
             SetDefault(Ez2Setting.TurboMode, false);
             SetDefault(Ez2Setting.TurboModeSnapshot, string.Empty);
@@ -1043,6 +1071,8 @@ namespace osu.Game.EzOsuGame.Configuration
         // 游戏设置
         ScalingGameMode,
         GameplayObjectAntialiasing,
+        PlayfieldWeatherEffect,
+        PlayfieldWeatherIntensity,
         ScaleSkinElements,
         GameplayDisableCmdSpace,
         AccuracyCutoffS,
@@ -1102,7 +1132,25 @@ namespace osu.Game.EzOsuGame.Configuration
         /// <summary>选歌「技能轴」分组所选轴，格式同 <see cref="SongSelectSkillSortAxis"/>。</summary>
         SongSelectSkillGroupAxis,
 
+        /// <summary>选歌界面排序方向；分组与排序字段相同时也同步调整分组顺序。</summary>
+        SongSelectSortDirection,
+
+        /// <summary>
+        /// 选歌面板评级是否跟随成绩列表的「只看当前 Mod」：开启时取当前 Mod 筛出的本地成绩中的最高评级，
+        /// 关闭时仍显示最高分那条成绩的评级。
+        /// </summary>
+        SongSelectPanelRankFollowsModFilter,
+
         HideMainMenuOnlineBanner,
+
+        /// <summary>选歌与主界面背景的视觉天气效果。</summary>
+        BackgroundWeatherEffect,
+
+        /// <summary>选歌与主界面背景天气效果强度。</summary>
+        BackgroundWeatherIntensity,
+
+        /// <summary>是否在主界面背景应用天气效果。</summary>
+        MainMenuWeatherEnabled,
 
         /// <summary>
         /// 主菜单 logo 贴图路径，默认 Menu/logo，可切换到 Menu/logo2 等同级资源。
@@ -1618,6 +1666,22 @@ namespace osu.Game.EzOsuGame.Configuration
 
         /// <summary>选歌界面背景叠 chart-dan 段位图（「段位痴」）。</summary>
         SkillDanFanatic,
+
+        BackgroundWeatherAnimationSpeed,
+        PlayfieldWeatherAnimationSpeed,
+        WeatherDesertHeatAmplitude,
+        WeatherDesertHeatScale,
+        WeatherDesertHeatTint,
+        WeatherUnderwaterScale,
+        WeatherUnderwaterBrightness,
+        WeatherUnderwaterTint,
+        WeatherOvercastRainDensity,
+        WeatherOvercastRainWind,
+        WeatherOvercastRainCloudiness,
+        WeatherLightCurtainScale,
+        WeatherLightCurtainBrightness,
+        WeatherLightCurtainFalloff,
+        WeatherLightCurtainSway,
     }
 
     public enum EzColumnType : byte

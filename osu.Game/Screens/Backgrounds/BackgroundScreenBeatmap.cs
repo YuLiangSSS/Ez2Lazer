@@ -8,8 +8,10 @@ using System.Threading;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Graphics;
+using osu.Framework.Graphics.Containers;
 using osu.Game.Beatmaps;
 using osu.Game.Configuration;
+using osu.Game.EzOsuGame.Configuration;
 using osu.Game.EzOsuGame.Performance;
 using osu.Game.Graphics.Backgrounds;
 using osu.Game.Graphics.Containers;
@@ -55,6 +57,9 @@ namespace osu.Game.Screens.Backgrounds
         internal readonly Bindable<bool> IsBreakTime = new Bindable<bool>();
 
         private readonly DimmableBackground dimmable;
+        private readonly WeatherEffectContainer weatherContainer;
+        private readonly BackgroundWeatherUsage weatherUsage;
+        private WeatherEffectSettingsBinding weatherSettings;
 
         /// <summary>
         /// [Ez] 立刻把当前暗度 / 可见性应用到背景，跳过过渡动画。
@@ -62,15 +67,27 @@ namespace osu.Game.Screens.Backgrounds
         /// </summary>
         public void ApplyDimInstantly() => dimmable.ApplyVisualsInstantly();
 
-        public Drawable CaptureSource => dimmable;
+        public Drawable CaptureSource => weatherContainer;
 
         protected virtual DimmableBackground CreateFadeContainer() => new DimmableBackground { RelativeSizeAxes = Axes.Both };
 
         public BackgroundScreenBeatmap(WorkingBeatmap beatmap = null)
+            : this(beatmap, BackgroundWeatherUsage.None)
         {
+        }
+
+        internal BackgroundScreenBeatmap(WorkingBeatmap beatmap, BackgroundWeatherUsage weatherUsage)
+        {
+            this.weatherUsage = weatherUsage;
             Beatmap = beatmap;
 
-            InternalChild = dimmable = CreateFadeContainer();
+            InternalChild = weatherContainer = new WeatherEffectContainer
+            {
+                RelativeSizeAxes = Axes.Both,
+                Scope = WeatherEffectScope.NonGameplay,
+                IsGameplay = false,
+                Child = dimmable = CreateFadeContainer(),
+            };
 
             dimmable.StoryboardReplacesBackground.BindTo(StoryboardReplacesBackground);
             dimmable.IgnoreUserSettings.BindTo(IgnoreUserSettings);
@@ -80,8 +97,18 @@ namespace osu.Game.Screens.Backgrounds
         }
 
         [BackgroundDependencyLoader]
-        private void load()
+        private void load(Ez2ConfigManager ezConfig)
         {
+            if (weatherUsage == BackgroundWeatherUsage.SongSelect)
+            {
+                weatherSettings = new WeatherEffectSettingsBinding(
+                    weatherContainer,
+                    ezConfig,
+                    Ez2Setting.BackgroundWeatherEffect,
+                    Ez2Setting.BackgroundWeatherIntensity,
+                    Ez2Setting.BackgroundWeatherAnimationSpeed);
+            }
+
             var background = new BeatmapBackground(beatmap);
             LoadComponent(background);
             switchBackground(background);
@@ -223,6 +250,12 @@ namespace osu.Game.Screens.Backgrounds
 
                 Background?.BlurTo(blurTarget, BACKGROUND_FADE_DURATION, Easing.OutQuint);
             }
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            weatherSettings?.Dispose();
+            base.Dispose(isDisposing);
         }
     }
 }

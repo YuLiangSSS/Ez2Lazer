@@ -40,6 +40,7 @@ using osu.Game.Input.Bindings;
 using osu.Game.Localisation;
 using osu.Game.Online.API;
 using osu.Game.Online.API.Requests.Responses;
+using osu.Game.Overlays;
 using osu.Game.Rulesets;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Screens.Select.Filter;
@@ -62,6 +63,7 @@ namespace osu.Game.Screens.Select
         private ShearedToggleButton showConvertedBeatmapsButton = null!;
         private DifficultyRangeSlider difficultyRangeSlider = null!;
         private SortModeDropdown sortDropdown = null!; // Ez功能
+        private Bindable<SortDirection> sortDirection = null!;
         private SkillAxisDropdown sortAxisDropdown = null!;
         private GroupModeDropdown groupDropdown = null!;
         private SkillAxisDropdown groupAxisDropdown = null!;
@@ -72,6 +74,7 @@ namespace osu.Game.Screens.Select
         private readonly Bindable<string> configCollectionFilter = new Bindable<string>();
         private Bindable<string> configSkillSortAxis = null!;
         private Bindable<string> configSkillGroupAxis = null!;
+
         /// <summary>
         /// Relay for wedge right-radar mode. <see cref="SongSelect"/> sets <see cref="Bindable{T}.BindTarget"/> to <see cref="BeatmapDetailsArea.RightRadarMode"/>.
         /// Only this control subscribes to changes for skill-axis refresh.
@@ -122,6 +125,8 @@ namespace osu.Game.Screens.Select
         [BackgroundDependencyLoader]
         private void load(IAPIProvider api)
         {
+            sortDirection = ezConfig.GetBindable<SortDirection>(Ez2Setting.SongSelectSortDirection);
+
             RelativeSizeAxes = Axes.X;
             AutoSizeAxes = Axes.Y;
 
@@ -222,9 +227,9 @@ namespace osu.Game.Screens.Select
                                     ColumnDimensions = new[]
                                     {
                                         new Dimension(maxSize: 180),
-                                        new Dimension(GridSizeMode.Absolute, 5),
+                                        new Dimension(GridSizeMode.Absolute, 4),
                                         new Dimension(maxSize: 180),
-                                        new Dimension(GridSizeMode.Absolute, 5),
+                                        new Dimension(GridSizeMode.Absolute, 4),
                                         new Dimension(),
                                         new Dimension(GridSizeMode.AutoSize),
                                     },
@@ -246,7 +251,11 @@ namespace osu.Game.Screens.Select
                                             {
                                                 RelativeSizeAxes = Axes.X,
                                             },
-                                            Empty(),
+                                            new SortDirectionButton(sortDirection)
+                                            {
+                                                // Anchor = Anchor.Centre,
+                                                // Origin = Anchor.Centre,
+                                            },
                                         }
                                     }
                                 },
@@ -347,6 +356,7 @@ namespace osu.Game.Screens.Select
             ezConfig.BindWith(Ez2Setting.KeySoundPreviewMode, ksPreviewButton.State);
             configSkillSortAxis = ezConfig.GetBindable<string>(Ez2Setting.SongSelectSkillSortAxis);
             configSkillGroupAxis = ezConfig.GetBindable<string>(Ez2Setting.SongSelectSkillGroupAxis);
+            sortDirection.ValueChanged += onSortDirectionChanged;
 
             ruleset.BindValueChanged(_ =>
             {
@@ -590,6 +600,11 @@ namespace osu.Game.Screens.Select
         {
             base.Dispose(isDisposing);
             collectionsSubscription?.Dispose();
+
+            if (!IsLoaded)
+                return;
+
+            sortDirection.ValueChanged -= onSortDirectionChanged;
         }
 
         /// <summary>
@@ -609,6 +624,7 @@ namespace osu.Game.Screens.Select
             {
                 SelectedBeatmapSet = ScopedBeatmapSet.Value,
                 Sort = sortDropdown.Current.Value,
+                SortDirection = sortDirection.Value,
                 Group = groupDropdown.Current.Value?.Value ?? GroupMode.None,
                 AllowConvertedBeatmaps = showConvertedBeatmapsButton.Active.Value,
                 Ruleset = ruleset.Value,
@@ -650,6 +666,8 @@ namespace osu.Game.Screens.Select
         private void applyCircleSizeFilter(FilterCriteria criteria) => csSelector.ApplyToFilterCriteria(criteria);
 
         private int criteriaUpdateSuppression;
+
+        private void onSortDirectionChanged(ValueChangedEvent<SortDirection> _) => updateCriteria();
 
         private void updateCriteria(bool clearScopedSet = true)
         {

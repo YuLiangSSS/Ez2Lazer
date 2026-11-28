@@ -711,8 +711,6 @@ namespace osu.Game.Screens.Select
             {
                 ezPreviewManager.StopPreview();
             }
-
-            beatmap.PrepareTrackForPreview(true);
         }
 
         #endregion
@@ -880,6 +878,7 @@ namespace osu.Game.Screens.Select
         {
             onEzSongSelectEntering(e);
             base.OnEntering(e);
+            setBackgroundWeatherContext(isMainMenu: false);
 
             this.FadeIn();
             onArrivingAtScreen();
@@ -888,6 +887,7 @@ namespace osu.Game.Screens.Select
         public override void OnResuming(ScreenTransitionEvent e)
         {
             base.OnResuming(e);
+            setBackgroundWeatherContext(isMainMenu: false);
 
             this.FadeIn(fade_duration, Easing.OutQuint);
             onArrivingAtScreen();
@@ -1207,7 +1207,15 @@ namespace osu.Game.Screens.Select
 
             usingEzBackground = useEzBackground.Value;
 
-            return usingEzBackground ? new BackgroundScreenDefault() : new BackgroundScreenBeatmap(Beatmap.Value);
+            return usingEzBackground
+                ? new BackgroundScreenDefault()
+                : new BackgroundScreenBeatmap(Beatmap.Value, BackgroundWeatherUsage.SongSelect);
+        }
+
+        private void setBackgroundWeatherContext(bool isMainMenu)
+        {
+            if (CurrentBackgroundScreen is BackgroundScreenDefault background)
+                background.SetMainMenuContext(isMainMenu);
         }
 
         // Drops the beatmap background already on screen and hides the menu background resumed under it.
