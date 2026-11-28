@@ -30,8 +30,6 @@ namespace osu.Game.EzOsuGame.Scoring
 
         private readonly IReadOnlyDictionary<LeaderboardModFilter, HashSet<string>> modExceptions;
 
-        private readonly HashSet<(string modType, string settingName)> settingExceptions;
-
         private static readonly LeaderboardModFilter[] categories =
         {
             LeaderboardModFilter.Rate,
@@ -50,11 +48,6 @@ namespace osu.Game.EzOsuGame.Scoring
                 [LeaderboardModFilter.Difficulty] = new HashSet<string>(document.Difficulty ?? [], StringComparer.Ordinal),
                 [LeaderboardModFilter.Conversion] = new HashSet<string>(document.Conversion ?? [], StringComparer.Ordinal),
             };
-
-            settingExceptions = new HashSet<(string modType, string settingName)>(
-                (document.Settings ?? [])
-                .Where(setting => !string.IsNullOrWhiteSpace(setting.ModType) && !string.IsNullOrWhiteSpace(setting.Name))
-                .Select(setting => (setting.ModType!, setting.Name!)));
         }
 
         public static LeaderboardModImpactUnit CreateDefault() => new LeaderboardModImpactUnit(createDefaultDocument());
@@ -108,12 +101,16 @@ namespace osu.Game.EzOsuGame.Scoring
             Rate =
             [
                 "osu.Game.Rulesets.Mods.ModNoMod",
+                "osu.Game.Rulesets.Mods.ModScoreV2",
+                "osu.Game.Rulesets.Mania.Mods.ManiaModScoreV2",
                 "osu.Game.Rulesets.Mania.Mods.ManiaModConstantSpeed",
                 "osu.Game.Rulesets.Taiko.Mods.TaikoModConstantSpeed",
             ],
             Difficulty =
             [
                 "osu.Game.Rulesets.Mods.ModNoMod",
+                "osu.Game.Rulesets.Mods.ModScoreV2",
+                "osu.Game.Rulesets.Mania.Mods.ManiaModScoreV2",
                 "osu.Game.Rulesets.Osu.Mods.OsuModClassic",
                 "osu.Game.Rulesets.Taiko.Mods.TaikoModClassic",
                 "osu.Game.Rulesets.Catch.Mods.CatchModClassic",
@@ -122,6 +119,8 @@ namespace osu.Game.EzOsuGame.Scoring
             Conversion =
             [
                 "osu.Game.Rulesets.Mods.ModNoMod",
+                "osu.Game.Rulesets.Mods.ModScoreV2",
+                "osu.Game.Rulesets.Mania.Mods.ManiaModScoreV2",
                 "osu.Game.Rulesets.Mania.Mods.ManiaModConstantSpeed",
                 "osu.Game.Rulesets.Taiko.Mods.TaikoModConstantSpeed",
                 "osu.Game.Rulesets.Osu.Mods.OsuModClassic",
@@ -129,14 +128,6 @@ namespace osu.Game.EzOsuGame.Scoring
                 "osu.Game.Rulesets.Catch.Mods.CatchModClassic",
                 "osu.Game.Rulesets.Mania.Mods.ManiaModClassic",
                 "osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod.ManiaModO2Health",
-            ],
-            Settings =
-            [
-                new LeaderboardModSettingException
-                {
-                    ModType = "osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod.ManiaModAdjust",
-                    Name = "constant_speed",
-                },
             ],
         };
 
@@ -216,20 +207,16 @@ namespace osu.Game.EzOsuGame.Scoring
 
             foreach (var (settingName, scoreSetting) in scoreMod.Settings)
             {
-                if (settingExceptions.Contains((scoreMod.ModType, settingName)))
-                    continue;
-
                 if (!selectedMod.Settings.TryGetValue(settingName, out object? selectedSetting)
                     || !EqualityComparer<object>.Default.Equals(scoreSetting, selectedSetting))
                     return false;
             }
 
-            return scoreMod.Settings.Keys.Count(settingName => !settingExceptions.Contains((scoreMod.ModType, settingName)))
-                   == selectedMod.Settings.Keys.Count(settingName => !settingExceptions.Contains((selectedMod.ModType, settingName)));
+            return scoreMod.Settings.Count == selectedMod.Settings.Count;
         }
     }
 
-    internal sealed class LeaderboardModImpactExceptionsDocument
+    public sealed class LeaderboardModImpactExceptionsDocument
     {
         public int Version { get; set; } = 1;
 
@@ -238,14 +225,5 @@ namespace osu.Game.EzOsuGame.Scoring
         public List<string>? Difficulty { get; set; }
 
         public List<string>? Conversion { get; set; }
-
-        public List<LeaderboardModSettingException>? Settings { get; set; }
-    }
-
-    internal sealed class LeaderboardModSettingException
-    {
-        public string? ModType { get; set; }
-
-        public string? Name { get; set; }
     }
 }

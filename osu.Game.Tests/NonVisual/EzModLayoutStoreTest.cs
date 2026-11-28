@@ -11,7 +11,6 @@ using osu.Game.EzOsuGame;
 using osu.Game.EzOsuGame.Layout;
 using osu.Game.EzOsuGame.Mods;
 using osu.Game.EzOsuGame.Scoring;
-using osu.Game.Rulesets.Mania.EzMania.Mods.CommunityMod;
 using osu.Game.Rulesets.Mania.Mods;
 using osu.Game.Rulesets.Mods;
 
@@ -168,6 +167,12 @@ namespace osu.Game.Tests.NonVisual
             Assert.That(File.Exists(configFile), Is.True);
             var defaultDocument = JsonConvert.DeserializeObject<LeaderboardModImpactExceptionsDocument>(File.ReadAllText(configFile))!;
             Assert.That(defaultDocument.Version, Is.EqualTo(1));
+            Assert.That(defaultDocument.Rate, Does.Contain("osu.Game.Rulesets.Mods.ModScoreV2"));
+            Assert.That(defaultDocument.Rate, Does.Contain("osu.Game.Rulesets.Mania.Mods.ManiaModScoreV2"));
+            Assert.That(defaultDocument.Difficulty, Does.Contain("osu.Game.Rulesets.Mods.ModScoreV2"));
+            Assert.That(defaultDocument.Difficulty, Does.Contain("osu.Game.Rulesets.Mania.Mods.ManiaModScoreV2"));
+            Assert.That(defaultDocument.Conversion, Does.Contain("osu.Game.Rulesets.Mods.ModScoreV2"));
+            Assert.That(defaultDocument.Conversion, Does.Contain("osu.Game.Rulesets.Mania.Mods.ManiaModScoreV2"));
             Assert.That(defaultDocument.Conversion, Does.Contain("osu.Game.Rulesets.Mania.Mods.ManiaModConstantSpeed"));
 
             const string custom_json = """
@@ -175,20 +180,13 @@ namespace osu.Game.Tests.NonVisual
                                         "Version": 1,
                                         "Rate": [],
                                         "Difficulty": [],
-                                        "Conversion": [],
-                                        "Settings": []
+                                        "Conversion": []
                                       }
                                       """;
             File.WriteAllText(configFile, custom_json);
 
             var customStore = new EzConfigStore(storage);
             Assert.That(customStore.ModImpactUnit.GetRelevantMods(new Mod[] { new ManiaModConstantSpeed() }, LeaderboardModFilter.All), Has.Length.EqualTo(1));
-            var selectedAdjust = new ManiaModAdjust();
-            var scoreAdjust = new ManiaModAdjust
-            {
-                ConstantSpeed = { Value = !selectedAdjust.ConstantSpeed.Value },
-            };
-            Assert.That(customStore.ModImpactUnit.ModsMatch(new Mod[] { scoreAdjust }, new Mod[] { selectedAdjust }, LeaderboardModFilter.All), Is.False);
             Assert.That(File.ReadAllText(configFile), Is.EqualTo(custom_json));
         }
 

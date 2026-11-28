@@ -66,6 +66,8 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
             Mod[] exceptions = [new ModNoMod(), maniaConstantSpeed, taikoConstantSpeed, classic, health];
             Assert.That(impactUnit.GetRelevantMods(exceptions, LeaderboardModFilter.All), Is.Empty);
             Assert.That(impactUnit.ModsMatch(exceptions, Array.Empty<Mod>(), LeaderboardModFilter.All), Is.True);
+            Assert.That(impactUnit.ModsMatch(new Mod[] { new ModScoreV2() }, Array.Empty<Mod>(), LeaderboardModFilter.All), Is.True);
+            Assert.That(impactUnit.ModsMatch(new Mod[] { new ManiaModScoreV2() }, Array.Empty<Mod>(), LeaderboardModFilter.All), Is.True);
             Assert.That(impactUnit.ModsMatch(new Mod[] { loop }, Array.Empty<Mod>(), LeaderboardModFilter.All), Is.False);
         }
 
@@ -99,7 +101,7 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
         }
 
         [Test]
-        public void TestConstantSpeedSettingDoesNotAffectModMatching()
+        public void TestConstantSpeedSettingDifferenceKeepsModRelevant()
         {
             var selected = new ManiaModAdjust();
             var score = new ManiaModAdjust
@@ -107,7 +109,7 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
                 ConstantSpeed = { Value = !selected.ConstantSpeed.Value },
             };
 
-            Assert.That(impactUnit.ModsMatch(new Mod[] { score }, new Mod[] { selected }, LeaderboardModFilter.Difficulty), Is.True);
+            Assert.That(impactUnit.ModsMatch(new Mod[] { score }, new Mod[] { selected }, LeaderboardModFilter.Difficulty), Is.False);
         }
 
         [Test]
@@ -123,7 +125,7 @@ namespace osu.Game.Tests.EzOsuGame.Scoring
                 OverallDifficulty = { Value = 4 },
             };
 
-            Assert.That(impactUnit.ModsMatch(new Mod[] { score }, new Mod[] { selected }, LeaderboardModFilter.All), Is.True);
+            Assert.That(impactUnit.ModsMatch(new Mod[] { score }, new Mod[] { selected }, LeaderboardModFilter.All), Is.False);
 
             score.OverallDifficulty.Value = 5;
             Assert.That(impactUnit.ModsMatch(new Mod[] { score }, new Mod[] { selected }, LeaderboardModFilter.Difficulty), Is.False);
